@@ -1,0 +1,82 @@
+# ============================================
+# Manhattan WhatsApp Manager - Requirements
+# ============================================
+
+# -------------------- RUNTIME --------------------
+# Node.js >= 20.x (LTS recomendado)
+#   https://nodejs.org/
+# npm >= 10.x (incluso no Node.js)
+
+# -------------------- EVOLUTION API --------------------
+# Evolution API v2.3.7
+#   https://github.com/EvolutionAPI/evolution-api
+#   Clonar dentro da pasta do projeto:
+#     git clone https://github.com/EvolutionAPI/evolution-api.git
+#     cd evolution-api && npm install
+#
+# Dependências principais da Evolution API:
+#   express ^4.21.2
+#   baileys 7.0.0-rc.9       (WhatsApp Web client)
+#   axios ^1.7.9
+#   prisma ^6.1.0             (ORM - banco de dados)
+#   @prisma/client ^6.16.2
+#   redis ^4.7.0              (cache - opcional)
+#   socket.io ^4.8.1          (websocket)
+#   sharp ^0.34.2             (processamento de imagens)
+#   fluent-ffmpeg ^2.1.3      (processamento de áudio/vídeo)
+#   @ffmpeg-installer/ffmpeg ^1.1.0
+#   openai ^4.77.3            (integração IA)
+#   qrcode ^1.5.4             (geração QR Code)
+#   jsonwebtoken ^9.0.2       (autenticação JWT)
+#   amqplib ^0.10.5           (RabbitMQ - opcional)
+#   kafkajs ^2.2.4            (Kafka - opcional)
+#   minio ^8.0.3              (storage S3 - opcional)
+#   cors ^2.8.5
+#   dotenv ^16.4.7
+#   pino ^9.10.0              (logging)
+#   uuid ^13.0.0
+
+# -------------------- BANCO DE DADOS --------------------
+# PostgreSQL >= 14 (recomendado) OU MySQL >= 8
+#   PostgreSQL: https://www.postgresql.org/download/
+#   MySQL: https://dev.mysql.com/downloads/
+#
+# Definir no .env:
+#   DATABASE_PROVIDER=postgresql
+#   DATABASE_CONNECTION_URI=postgresql://user:pass@localhost:5432/evolution
+
+# -------------------- OPCIONAIS --------------------
+# Redis >= 7 (cache e sessões)
+#   https://redis.io/download/
+#
+# FFmpeg (processamento de áudio - necessário para áudios do WhatsApp)
+#   https://ffmpeg.org/download.html
+#   Windows: choco install ffmpeg  OU  winget install ffmpeg
+#
+# RabbitMQ (filas de mensagens - opcional)
+#   https://www.rabbitmq.com/download.html
+#
+# Docker (alternativa para rodar tudo containerizado)
+#   https://www.docker.com/get-started/
+
+# -------------------- MANHATTAN (FRONTEND + SERVER) --------------------
+# Sem dependências externas - usa apenas módulos nativos do Node.js:
+#   http, fs, path, readline
+#
+# Para rodar:
+#   node serve.js        (servidor web na porta 3000)
+#   node evolution-client.js  (setup da instância WhatsApp)
+
+# -------------------- SETUP RÁPIDO --------------------
+# 1. Instalar Node.js >= 20
+# 2. Instalar PostgreSQL (ou MySQL)
+# 3. Instalar FFmpeg
+# 4. Clonar Evolution API:
+#      git clone https://github.com/EvolutionAPI/evolution-api.git
+#      cd evolution-api && npm install
+# 5. Configurar .env da Evolution API
+# 6. Rodar Evolution API:
+#      cd evolution-api && npm run start
+# 7. Rodar Manhattan:
+#      node serve.js
+# 8. Acessar http://localhost:3000
