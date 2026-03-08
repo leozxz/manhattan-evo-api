@@ -1,0 +1,25 @@
+{
+  "name": "manhattan-whatsapp-manager",
+  "version": "1.0.0",
+  "description": "Manhattan WhatsApp Manager - Interface web para gerenciamento de instâncias WhatsApp via Evolution API",
+  "main": "serve.js",
+  "scripts": {
+    "start": "node serve.js",
+    "setup": "node evolution-client.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "evolution-api",
+    "manager"
+  ],
+  "author": "leozxz",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/leozxz/manhattan-evo-api.git"
+  }
+}
