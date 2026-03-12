@@ -408,31 +408,50 @@ async function addMember() {
   if (!num || num.length < 10) return toast('Numero invalido (use DDI+DDD+numero, ex: 5511999999999)', 'error');
   input.value = '';
 
-  // First check if number is on WhatsApp
+  // First check if number is on WhatsApp and get the real JID
   toast('Verificando numero...');
   const check = await api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers: [num] });
+  let jidToAdd = num;
   if (check.ok && Array.isArray(check.data)) {
     const found = check.data.find(n => n.exists === true || n.exists === 'true');
     if (!found) {
       toast('Numero ' + num + ' nao esta no WhatsApp', 'error');
       return;
     }
+    // Use the real JID returned by WhatsApp (ensures correct number format)
+    if (found.jid) jidToAdd = found.jid;
   }
 
   toast('Adicionando...');
   const res = await api('POST', '/group/updateParticipant/' + currentInstance, {
     groupJid: selectedGroup,
     action: 'add',
-    participants: [num]
+    participants: [jidToAdd]
   });
 
   if (res.ok) {
     const results = res.data?.updateParticipants || res.data || [];
-    const failed = Array.isArray(results) && results.some(r => r.status && String(r.status) !== '200');
-    if (failed) {
-      const statusCodes = { '403': 'privacidade nao permite adicionar', '408': 'numero nao encontrado', '409': 'ja esta no grupo', '500': 'erro interno' };
-      const statusInfo = results.map(r => statusCodes[String(r.status)] || 'erro ' + r.status).join(', ');
-      toast('Nao foi possivel adicionar: ' + statusInfo, 'error');
+    const failed = Array.isArray(results) ? results.filter(r => r.status && String(r.status) !== '200') : [];
+    if (failed.length > 0) {
+      // 408 = privacy settings block direct add, try sending invite link instead
+      const needsInvite = failed.some(r => String(r.status) === '408' || String(r.status) === '403');
+      if (needsInvite) {
+        toast('Privacidade nao permite add direto. Enviando convite...');
+        const invRes = await api('POST', '/group/sendInvite/' + currentInstance, {
+          groupJid: selectedGroup,
+          description: 'Convite para o grupo',
+          numbers: [num]
+        });
+        if (invRes.ok) {
+          toast('Convite enviado por mensagem!');
+        } else {
+          toast('Erro ao enviar convite', 'error');
+        }
+      } else {
+        const statusCodes = { '409': 'ja esta no grupo', '500': 'erro interno' };
+        const statusInfo = failed.map(r => statusCodes[String(r.status)] || 'erro ' + r.status).join(', ');
+        toast('Nao foi possivel adicionar: ' + statusInfo, 'error');
+      }
     } else {
       toast('Participante adicionado!');
     }
