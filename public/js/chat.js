@@ -865,6 +865,10 @@ async function loadMediaForMsg(m) {
 }
 
 function appendSystemMessage(text) {
+  if (!selectedGroup) return;
+  const ts = Math.floor(Date.now() / 1000);
+  saveSystemEvent(selectedGroup, { text, ts });
+
   const container = document.getElementById('msgContainer');
   if (!container) return;
   const el = document.createElement('div');
@@ -872,6 +876,18 @@ function appendSystemMessage(text) {
   el.innerHTML = '<span>' + escapeHtml(text) + '</span>';
   container.appendChild(el);
   container.scrollTop = container.scrollHeight;
+}
+
+function getSystemEvents(groupJid) {
+  try { return JSON.parse(localStorage.getItem('sysevt_' + groupJid) || '[]'); } catch { return []; }
+}
+
+function saveSystemEvent(groupJid, evt) {
+  const events = getSystemEvents(groupJid);
+  events.push(evt);
+  // Keep max 200 events per group
+  if (events.length > 200) events.splice(0, events.length - 200);
+  try { localStorage.setItem('sysevt_' + groupJid, JSON.stringify(events)); } catch {}
 }
 
 function previewImage(src) {
@@ -896,7 +912,8 @@ async function fetchAndRenderMessages() {
 
   const rd = res.ok ? res.data : null;
   const msgs = extractMessages(rd);
-  const total = rd?.messages?.total || msgs.length;
+  const sysEvents = getSystemEvents(selectedGroup);
+  const total = (rd?.messages?.total || msgs.length) + sysEvents.length;
 
   // Only re-render if count changed
   if (total === lastMsgCount && total > 0) return;
@@ -904,13 +921,14 @@ async function fetchAndRenderMessages() {
 
   const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 60;
 
-  if (msgs.length > 0) {
-    // Sort by timestamp ascending (oldest first)
-    const sorted = [...msgs].sort((a, b) => {
-      const tsA = typeof a.messageTimestamp === 'string' ? parseInt(a.messageTimestamp) : (a.messageTimestamp || 0);
-      const tsB = typeof b.messageTimestamp === 'string' ? parseInt(b.messageTimestamp) : (b.messageTimestamp || 0);
-      return tsA - tsB;
-    });
+  if (msgs.length > 0 || sysEvents.length > 0) {
+    // Merge regular messages with system events into a unified sorted list
+    const allItems = msgs.map(m => ({ type: 'msg', data: m, ts: typeof m.messageTimestamp === 'string' ? parseInt(m.messageTimestamp) : (m.messageTimestamp || 0) }));
+    sysEvents.forEach(evt => { allItems.push({ type: 'sys', data: evt, ts: evt.ts || 0 }); });
+    allItems.sort((a, b) => a.ts - b.ts);
+
+    // Extract only regular msgs for reaction map and contact names
+    const sorted = allItems.filter(i => i.type === 'msg').map(i => i.data);
 
     // Track last message timestamp for group ordering
     if (sorted.length > 0 && selectedGroup) {
@@ -936,7 +954,38 @@ async function fetchAndRenderMessages() {
     let prevDate = '';
     let prevSenderJid = '';
     let prevTimestamp = 0;
-    sorted.forEach(m => {
+    allItems.forEach(item => {
+      // Render system events
+      if (item.type === 'sys') {
+        const sysTs = item.ts;
+        // Day separator for system events too
+        if (sysTs) {
+          const ms = sysTs < 1e12 ? sysTs * 1000 : sysTs;
+          const d = new Date(ms);
+          const sysDate = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+          if (sysDate && sysDate !== prevDate) {
+            const sep = document.createElement('div');
+            sep.className = 'msg-day-separator';
+            const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            let label = sysDate;
+            if (sysDate === today) label = 'Hoje';
+            else if (sysDate === yesterday) label = 'Ontem';
+            sep.innerHTML = '<span>' + label + '</span>';
+            container.appendChild(sep);
+            prevDate = sysDate;
+          }
+        }
+        const el = document.createElement('div');
+        el.className = 'msg-system';
+        el.innerHTML = '<span>' + escapeHtml(item.data.text) + '</span>';
+        container.appendChild(el);
+        prevSenderJid = '';
+        prevTimestamp = 0;
+        return;
+      }
+
+      const m = item.data;
       // Skip reaction messages (they are shown as badges on target msgs)
       if (m.messageType === 'reactionMessage') return;
 
