@@ -131,6 +131,10 @@ body {
 }
 .instance-card:hover { box-shadow: var(--shadow-md); }
 .instance-card.card-active { border-color: var(--accent); box-shadow: var(--shadow-md), 0 0 0 1px var(--accent); }
+.instance-active-badge {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 2px 8px; border-radius: 4px; background: var(--accent); color: #fff;
+}
 
 .instance-card-header {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
@@ -380,17 +384,29 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 
 /* Toast */
 .toast {
-  position: fixed; bottom: 24px; right: 24px; padding: 12px 20px;
+  position: fixed; bottom: 24px; right: 24px; padding: 12px 40px 12px 16px;
   border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; color: #fff; z-index: 1000;
-  animation: slideIn 0.3s ease; max-width: 360px;
-  box-shadow: var(--shadow-lg);
+  max-width: 380px; box-shadow: var(--shadow-lg);
+  animation: toastIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: opacity 0.3s, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.toast.toast-out {
+  animation: none;
+  opacity: 0; transform: translateX(120%);
 }
 .toast-success { background: var(--accent); }
 .toast-error { background: var(--danger); }
+.toast-close {
+  position: absolute; top: 0; right: 0; width: 32px; height: 100%;
+  background: none; border: none; color: rgba(255,255,255,0.7); cursor: pointer;
+  font-size: 16px; display: flex; align-items: center; justify-content: center;
+  transition: color 0.15s;
+}
+.toast-close:hover { color: #fff; }
 
-@keyframes slideIn {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+@keyframes toastIn {
+  from { transform: translateX(120%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
 }
 
 .spinner {

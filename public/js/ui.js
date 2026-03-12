@@ -45,9 +45,22 @@ async function api(method, path, body) {
 function toast(msg, type = 'success') {
   const el = document.createElement('div');
   el.className = 'toast toast-' + type;
-  el.textContent = msg;
+  el.innerHTML = '<span>' + escapeHtml(msg) + '</span>';
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'toast-close';
+  closeBtn.innerHTML = '&times;';
+  closeBtn.onclick = () => dismissToast(el);
+  el.appendChild(closeBtn);
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 4000);
+  el._timer = setTimeout(() => dismissToast(el), 4000);
+}
+
+function dismissToast(el) {
+  if (el._dismissed) return;
+  el._dismissed = true;
+  clearTimeout(el._timer);
+  el.classList.add('toast-out');
+  setTimeout(() => el.remove(), 350);
 }
 
 function ensureConnected() {

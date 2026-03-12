@@ -23,6 +23,12 @@ function renderInstances() {
     statusDiv.className = 'instance-status ' + stClass;
     statusDiv.innerHTML = '<div class="instance-status-dot"></div> ' + stLabel;
     header.appendChild(nameSpan);
+    if (inst.name === currentInstance) {
+      const badge = document.createElement('span');
+      badge.className = 'instance-active-badge';
+      badge.textContent = 'Em uso';
+      header.appendChild(badge);
+    }
     header.appendChild(statusDiv);
 
     const body = document.createElement('div');
@@ -368,11 +374,19 @@ function switchInstance(name) {
   currentInstance = name;
   contactsLoaded = false;
   saveInstances();
+  renderInstances();
   updateSelector();
   // Reload current page data
   if (document.getElementById('page-chat').classList.contains('active')) {
     selectedGroup = null;
     selectedGroupData = null;
+    lastMsgCount = 0;
+    groups = [];
+    // Clear group list immediately to avoid showing old instance's groups
+    const groupList = document.getElementById('groupList');
+    if (groupList) groupList.innerHTML = '<div style="padding:24px;text-align:center;color:#667781">Carregando grupos...</div>';
+    // Stop message polling from previous group
+    if (typeof stopMsgPolling === 'function') stopMsgPolling();
     loadContacts();
     loadGroups();
     document.getElementById('chatArea').innerHTML =
