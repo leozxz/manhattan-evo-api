@@ -3,6 +3,47 @@
 // =====================
 let groupParticipants = [];
 let groupImageBase64 = null;
+let selectedMsgType = 'single';
+
+// Pitches — each pitch is an array of messages sent in sequence
+const pitches = {
+  'Boas-vindas': [
+    'Olá',
+    'Tudo bem?'
+  ],
+};
+
+// Populate pitch select on load
+function initPitchSelect() {
+  const sel = document.getElementById('pitchSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">-- Nenhum --</option>';
+  Object.keys(pitches).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name + ' (' + pitches[name].length + ' msgs)';
+    sel.appendChild(opt);
+  });
+}
+
+function switchMsgType(type) {
+  selectedMsgType = type;
+  document.querySelectorAll('.msg-type-tab').forEach(t => t.classList.toggle('active', t.dataset.type === type));
+  document.getElementById('msgTypeSingle').style.display = type === 'single' ? '' : 'none';
+  document.getElementById('msgTypePitch').style.display = type === 'pitch' ? '' : 'none';
+}
+
+function previewPitch() {
+  const name = document.getElementById('pitchSelect').value;
+  const preview = document.getElementById('pitchPreview');
+  if (!name || !pitches[name]) { preview.innerHTML = ''; return; }
+  preview.innerHTML = pitches[name].map((msg, i) =>
+    '<div class="pitch-msg"><span class="pitch-num">' + (i + 1) + '</span>' + escapeHtml(msg) + '</div>'
+  ).join('');
+}
+
+// Init on page load
+document.addEventListener('DOMContentLoaded', initPitchSelect);
 
 function addParticipant() {
   const input = document.getElementById('participantInput');
@@ -85,11 +126,27 @@ async function createGroup() {
     });
   }
 
-  // Send first message
-  if (firstMsg) {
-    await new Promise(r => setTimeout(r, 2000));
+  // Send messages: single or pitch
+  await new Promise(r => setTimeout(r, 2000));
+  if (selectedMsgType === 'pitch') {
+    const pitchName = document.getElementById('pitchSelect').value;
+    if (pitchName && pitches[pitchName]) {
+      const msgs = pitches[pitchName];
+      toast('Enviando pitch (' + msgs.length + ' msgs)...');
+      for (let i = 0; i < msgs.length; i++) {
+        const msgRes = await api('POST', '/message/sendText/' + instName, { number: groupId, text: msgs[i] });
+        if (!msgRes.ok) {
+          toast('Erro ao enviar mensagem ' + (i + 1) + ' do pitch', 'error');
+          break;
+        }
+        // Small delay between messages to avoid spam detection
+        if (i < msgs.length - 1) await new Promise(r => setTimeout(r, 1500));
+      }
+      toast('Pitch enviado!');
+    }
+  } else if (firstMsg) {
     const msgRes = await api('POST', '/message/sendText/' + instName, { number: groupId, text: firstMsg });
-    if (msgRes.ok && msgRes.data && msgRes.data.key) toast('Mensagem "' + firstMsg + '" enviada!');
+    if (msgRes.ok && msgRes.data && msgRes.data.key) toast('Mensagem enviada!');
     else toast('Grupo criado, mas erro ao enviar mensagem', 'error');
   }
 
