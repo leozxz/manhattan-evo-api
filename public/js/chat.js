@@ -2,6 +2,7 @@
 // CHAT
 // =====================
 let groupLastMsg = {}; // groupId -> timestamp of last message
+try { groupLastMsg = JSON.parse(localStorage.getItem('groupLastMsg') || '{}'); } catch {}
 let showPanel = false;
 
 async function loadGroups() {
@@ -46,6 +47,51 @@ async function loadGroups() {
   groups = groupData;
   try { localStorage.setItem(cacheKey, JSON.stringify(groupData)); } catch {}
   renderGroupList();
+  fetchGroupTimestamps(groupData);
+}
+
+function saveGroupTimestamps() {
+  try { localStorage.setItem('groupLastMsg', JSON.stringify(groupLastMsg)); } catch {}
+}
+
+async function fetchGroupTimestamps(groupList) {
+  // Fetch last message timestamp for each group (in batches to avoid overload)
+  const toFetch = groupList.filter(g => !groupLastMsg[g.id]);
+  if (toFetch.length === 0) return;
+
+  const batchSize = 5;
+  let changed = false;
+  for (let i = 0; i < toFetch.length; i += batchSize) {
+    const batch = toFetch.slice(i, i + batchSize);
+    const results = await Promise.all(batch.map(g =>
+      api('POST', '/chat/findMessages/' + currentInstance, {
+        where: { key: { remoteJid: g.id } },
+        offset: 1,
+        page: 1
+      }).then(res => ({ id: g.id, res })).catch(() => ({ id: g.id, res: null }))
+    ));
+
+    results.forEach(({ id, res }) => {
+      if (!res || !res.ok) return;
+      const msgs = extractMessages(res.data);
+      if (msgs.length === 0) return;
+      // Find the most recent timestamp
+      let maxTs = 0;
+      msgs.forEach(m => {
+        const ts = typeof m.messageTimestamp === 'string' ? parseInt(m.messageTimestamp) : (m.messageTimestamp || 0);
+        if (ts > maxTs) maxTs = ts;
+      });
+      if (maxTs > (groupLastMsg[id] || 0)) {
+        groupLastMsg[id] = maxTs;
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      saveGroupTimestamps();
+      renderGroupList();
+    }
+  }
 }
 
 function renderGroupList() {
@@ -873,6 +919,7 @@ async function fetchAndRenderMessages() {
       const prevTs = groupLastMsg[selectedGroup] || 0;
       if (lastTs > prevTs) {
         groupLastMsg[selectedGroup] = lastTs;
+        saveGroupTimestamps();
         renderGroupList();
       }
     }
