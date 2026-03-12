@@ -1469,8 +1469,7 @@ async function toggleRecording() {
 
       const sendRes = await api('POST', '/message/sendWhatsAppAudio/' + currentInstance, {
         number: selectedGroup,
-        audio: 'data:' + mimeType + ';base64,' + base64,
-        encoding: true
+        audio: base64
       });
 
       if (sendRes.ok && sendRes.data && sendRes.data.key) {
