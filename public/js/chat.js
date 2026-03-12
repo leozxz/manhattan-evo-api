@@ -404,9 +404,20 @@ function filterParticipants() {
 
 async function addMember() {
   const input = document.getElementById('panelAddInput');
-  const num = input.value.trim().replace(/[^0-9]/g, '');
-  if (!num || num.length < 10) return toast('Numero invalido', 'error');
+  const num = input.value.trim().replace(/[^0-9+]/g, '').replace(/^\+/, '');
+  if (!num || num.length < 10) return toast('Numero invalido (use DDI+DDD+numero, ex: 5511999999999)', 'error');
   input.value = '';
+
+  // First check if number is on WhatsApp
+  toast('Verificando numero...');
+  const check = await api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers: [num] });
+  if (check.ok && Array.isArray(check.data)) {
+    const found = check.data.find(n => n.exists === true || n.exists === 'true');
+    if (!found) {
+      toast('Numero ' + num + ' nao esta no WhatsApp', 'error');
+      return;
+    }
+  }
 
   toast('Adicionando...');
   const res = await api('POST', '/group/updateParticipant/' + currentInstance, {
@@ -416,10 +427,19 @@ async function addMember() {
   });
 
   if (res.ok) {
-    toast('Participante adicionado!');
+    const results = res.data?.updateParticipants || res.data || [];
+    const failed = Array.isArray(results) && results.some(r => r.status && String(r.status) !== '200');
+    if (failed) {
+      const statusCodes = { '403': 'privacidade nao permite adicionar', '408': 'numero nao encontrado', '409': 'ja esta no grupo', '500': 'erro interno' };
+      const statusInfo = results.map(r => statusCodes[String(r.status)] || 'erro ' + r.status).join(', ');
+      toast('Nao foi possivel adicionar: ' + statusInfo, 'error');
+    } else {
+      toast('Participante adicionado!');
+    }
     loadParticipants();
   } else {
-    toast('Erro ao adicionar', 'error');
+    const errMsg = res.data?.response?.message?.[0] || res.data?.message || 'Erro ao adicionar';
+    toast(String(errMsg), 'error');
   }
 }
 
@@ -1815,22 +1835,30 @@ function startSSE() {
       if (!groupJid || groupJid !== selectedGroup) return;
 
       const action = d.action; // add, remove, promote, demote
-      const participants = d.participantsData || [];
-      const jids = d.participants || [];
+      const rawParticipants = d.participants || [];
 
-      const names = participants.map(p => p.name || formatPhone(p.phoneNumber || p.jid?.split('@')[0] || ''));
-      const jidNames = jids.map((jid, i) => names[i] || formatPhone(jid.split('@')[0]));
+      // participants can be strings OR objects {id, phoneNumber, admin}
+      const names = rawParticipants.map(p => {
+        if (typeof p === 'string') {
+          const phone = p.split('@')[0];
+          return contactNames[p] || formatPhone(phone);
+        }
+        // Object format from Evolution API
+        const phoneJid = typeof p.phoneNumber === 'string' ? p.phoneNumber : '';
+        const phone = phoneJid.split('@')[0] || (typeof p.id === 'string' ? p.id.split('@')[0] : '');
+        return contactNames[p.id] || (phone && /^\d{10,15}$/.test(phone) ? formatPhone(phone) : phone);
+      });
 
       const actionLabels = { add: 'entrou no grupo', remove: 'saiu do grupo', promote: 'agora e admin', demote: 'nao e mais admin' };
       const label = actionLabels[action] || action;
 
-      jidNames.forEach(name => {
-        appendSystemMessage(name + ' ' + label);
+      names.forEach(name => {
+        if (name) appendSystemMessage(name + ' ' + label);
       });
 
       // Refresh participants panel if open
       if (showPanel) loadParticipants();
-    } catch {}
+    } catch (err) { console.error('SSE group event error:', err); }
   });
 
   evtSource.addEventListener('CONNECTION_UPDATE', (e) => {
