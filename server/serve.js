@@ -243,8 +243,9 @@ http.createServer((req, res) => {
       try {
         const data = JSON.parse(body);
         const event = data.event || 'unknown';
+        console.log('[webhook]', event, JSON.stringify(data).substring(0, 200));
         broadcastSSE(event, data);
-      } catch {}
+      } catch (e) { console.log('[webhook] parse error:', e.message); }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end('{"ok":true}');
     });

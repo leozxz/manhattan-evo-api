@@ -165,7 +165,10 @@ async function selectGroup(group, el) {
       </div>
       <div class="group-panel" id="groupPanel" style="display:none">
         <div class="group-panel-header">
-          <h3>Participantes</h3>
+          <div class="panel-tabs">
+            <button class="panel-tab active" data-tab="participants" onclick="switchPanelTab('participants')">Participantes</button>
+            <button class="panel-tab" data-tab="info" onclick="switchPanelTab('info')">Info</button>
+          </div>
           <button class="btn btn-secondary btn-sm" onclick="togglePanel()">&times;</button>
         </div>
         <div class="group-panel-body" id="panelBody">
@@ -177,6 +180,7 @@ async function selectGroup(group, el) {
 
   await fetchAndRenderMessages();
   loadCachedParticipants(); // load after messages so contactNames has pushNames
+  renderPinnedBanner();
   startMsgPolling();
 }
 
@@ -185,12 +189,113 @@ function closeMobileChat() {
   if (layout) layout.classList.remove('chat-open');
 }
 
+let currentPanelTab = 'participants';
+
 async function togglePanel() {
   showPanel = !showPanel;
   const panel = document.getElementById('groupPanel');
   if (!panel) return;
   panel.style.display = showPanel ? 'flex' : 'none';
-  if (showPanel) loadParticipants();
+  if (showPanel) {
+    if (currentPanelTab === 'participants') loadParticipants();
+    else loadGroupInfo();
+  }
+}
+
+function switchPanelTab(tab) {
+  currentPanelTab = tab;
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  if (tab === 'participants') loadParticipants();
+  else loadGroupInfo();
+}
+
+async function loadGroupInfo() {
+  const body = document.getElementById('panelBody');
+  if (!body) return;
+  body.innerHTML = '<div class="spinner" style="margin-top:40px"></div>';
+
+  let desc = '';
+  try {
+    const res = await api('GET', '/group/findGroupInfos/' + currentInstance + '?groupJid=' + encodeURIComponent(selectedGroup));
+    if (res.ok && res.data) {
+      desc = res.data.desc || '';
+    }
+  } catch {}
+
+  // Load pinned message from localStorage
+  const pinKey = 'pin_' + selectedGroup;
+  const pinned = localStorage.getItem(pinKey) || '';
+
+  body.innerHTML = '';
+
+  // Description section
+  const descSection = document.createElement('div');
+  descSection.className = 'panel-info-section';
+  descSection.innerHTML = `
+    <div class="panel-info-label">Descricao do grupo</div>
+    <textarea id="groupDescInput" class="panel-info-textarea" placeholder="Sem descricao">${escapeHtml(desc)}</textarea>
+    <button class="btn btn-primary btn-sm panel-info-save" onclick="saveGroupDescription()">Salvar descricao</button>
+  `;
+  body.appendChild(descSection);
+
+  // Pinned message section
+  const pinSection = document.createElement('div');
+  pinSection.className = 'panel-info-section';
+  pinSection.innerHTML = `
+    <div class="panel-info-label">Mensagem fixada</div>
+    <textarea id="pinnedMsgInput" class="panel-info-textarea" placeholder="Nenhuma mensagem fixada">${escapeHtml(pinned)}</textarea>
+    <div class="panel-info-actions">
+      <button class="btn btn-primary btn-sm" onclick="savePinnedMessage()">Fixar</button>
+      <button class="btn btn-secondary btn-sm" onclick="clearPinnedMessage()">Remover</button>
+    </div>
+  `;
+  body.appendChild(pinSection);
+
+  // Show pinned banner in chat if exists
+  renderPinnedBanner();
+}
+
+async function saveGroupDescription() {
+  const desc = document.getElementById('groupDescInput')?.value || '';
+  toast('Salvando descricao...');
+  const res = await api('POST', '/group/updateGroupDescription/' + currentInstance, {
+    groupJid: selectedGroup,
+    description: desc
+  });
+  if (res.ok) toast('Descricao atualizada!');
+  else toast('Erro ao atualizar descricao', 'error');
+}
+
+function savePinnedMessage() {
+  const text = document.getElementById('pinnedMsgInput')?.value || '';
+  if (!text.trim()) return toast('Digite uma mensagem para fixar', 'error');
+  localStorage.setItem('pin_' + selectedGroup, text);
+  toast('Mensagem fixada!');
+  renderPinnedBanner();
+}
+
+function clearPinnedMessage() {
+  localStorage.removeItem('pin_' + selectedGroup);
+  document.getElementById('pinnedMsgInput').value = '';
+  toast('Mensagem removida');
+  renderPinnedBanner();
+}
+
+function renderPinnedBanner() {
+  // Remove existing banner
+  document.getElementById('pinnedBanner')?.remove();
+  const pinned = localStorage.getItem('pin_' + selectedGroup);
+  if (!pinned) return;
+
+  const container = document.querySelector('.chat-messages-area');
+  const msgContainer = document.getElementById('msgContainer');
+  if (!container || !msgContainer) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'pinnedBanner';
+  banner.className = 'pinned-banner';
+  banner.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#54656f"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6h2v-6h5v-2z"/></svg><span>' + escapeHtml(pinned) + '</span><button onclick="clearPinnedMessage()" title="Remover">&times;</button>';
+  container.insertBefore(banner, msgContainer);
 }
 
 async function fetchParticipants() {
@@ -230,31 +335,40 @@ async function loadParticipants() {
 
   body.innerHTML = '';
 
-  // Add member section
-  const addSection = document.createElement('div');
-  addSection.innerHTML = `
-    <div class="panel-add-row">
-      <input type="text" id="panelAddInput" placeholder="5511999999999" onkeydown="if(event.key==='Enter'){event.preventDefault();addMember()}">
-      <button class="btn btn-primary btn-sm" onclick="addMember()">Add</button>
+  // Fixed header with count, search, and add member
+  const header = document.createElement('div');
+  header.className = 'panel-fixed-header';
+  header.innerHTML = `
+    <div class="panel-header-top">
+      <span class="panel-member-count">${participants.length} membro${participants.length !== 1 ? 's' : ''}</span>
+      <div class="panel-add-row">
+        <input type="text" id="panelAddInput" placeholder="5511999999999" onkeydown="if(event.key==='Enter'){event.preventDefault();addMember()}">
+        <button class="btn btn-primary btn-sm" onclick="addMember()">Add</button>
+      </div>
     </div>
+    <input type="text" id="panelSearchInput" class="panel-search-input" placeholder="Buscar participante..." oninput="filterParticipants()">
   `;
-  body.appendChild(addSection);
+  body.appendChild(header);
 
   if (participants.length === 0) {
     body.innerHTML += '<div style="padding:20px;text-align:center;color:#667781;font-size:13px">Nao foi possivel carregar participantes. Tente novamente.</div>';
     return;
   }
 
-  const section = document.createElement('div');
-  section.className = 'panel-section';
-  section.innerHTML = '<div class="panel-section-title">Membros (' + participants.length + ')</div>';
-  body.appendChild(section);
+  const list = document.createElement('div');
+  list.id = 'panelMemberList';
+  list.className = 'panel-member-list';
 
-  participants.forEach(p => {
+  // Sort: superadmin first, then admins, then members
+  const sortedP = [...participants].sort((a, b) => {
+    const order = { superadmin: 0, admin: 1 };
+    return (order[a.admin] ?? 2) - (order[b.admin] ?? 2);
+  });
+
+  sortedP.forEach(p => {
     const jid = p.id || String(p);
     const phoneRaw = p.phoneNumber ? String(p.phoneNumber).split('@')[0] : String(jid).split('@')[0];
     const phoneFormatted = formatPhone(phoneRaw);
-    // Priority: contactNames (from findContacts/pushName) > p.pushName > p.name > p.notify
     const apiName = p.pushName || p.name || p.notify || p.verifiedName || '';
     if (apiName && !contactNames[String(jid)]) contactNames[String(jid)] = apiName;
     const displayName = contactNames[String(jid)] || '';
@@ -264,17 +378,27 @@ async function loadParticipants() {
 
     const el = document.createElement('div');
     el.className = 'panel-member';
+    el.dataset.search = (displayName + ' ' + phoneFormatted + ' ' + phoneRaw).toLowerCase();
     el.innerHTML = `
-      <div class="panel-member-avatar" style="background:${isAdmin ? '#25d366' : '#dfe5e7'}">
+      <div class="panel-member-avatar" style="background:${isSuperAdmin ? '#128c7e' : isAdmin ? '#25d366' : '#dfe5e7'}">
         <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
       </div>
       <div class="panel-member-info">
-        <div class="panel-member-name">${escapeHtml(displayName || phoneFormatted)}</div>
-        <div class="panel-member-role">${isSuperAdmin ? 'Criador' : isAdmin ? 'Admin' : 'Membro'}${displayName ? ' · ' + escapeHtml(phoneFormatted) : ''}</div>
+        <div class="panel-member-name">${escapeHtml(displayName || phoneFormatted)}${isSuperAdmin ? ' <span class="panel-badge badge-owner">Criador</span>' : isAdmin ? ' <span class="panel-badge badge-admin">Admin</span>' : ''}</div>
+        <div class="panel-member-role">${displayName ? escapeHtml(phoneFormatted) : 'Membro'}</div>
       </div>
       ${!isSuperAdmin ? '<button class="panel-member-remove" onclick="removeMember(\'' + escapeHtml(phoneRaw) + '\')" title="Remover">&times;</button>' : ''}
     `;
-    body.appendChild(el);
+    list.appendChild(el);
+  });
+  body.appendChild(list);
+}
+
+function filterParticipants() {
+  const query = (document.getElementById('panelSearchInput')?.value || '').toLowerCase().trim();
+  const members = document.querySelectorAll('#panelMemberList .panel-member');
+  members.forEach(el => {
+    el.style.display = !query || el.dataset.search.includes(query) ? '' : 'none';
   });
 }
 
@@ -655,6 +779,16 @@ async function loadMediaForMsg(m) {
   }
 }
 
+function appendSystemMessage(text) {
+  const container = document.getElementById('msgContainer');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'msg-system';
+  el.innerHTML = '<span>' + escapeHtml(text) + '</span>';
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
 function previewImage(src) {
   const overlay = document.createElement('div');
   overlay.className = 'img-preview-overlay';
@@ -713,6 +847,9 @@ async function fetchAndRenderMessages() {
 
     container.innerHTML = '';
     const mediaToLoad = [];
+    let prevDate = '';
+    let prevSenderJid = '';
+    let prevTimestamp = 0;
     sorted.forEach(m => {
       // Skip reaction messages (they are shown as badges on target msgs)
       if (m.messageType === 'reactionMessage') return;
@@ -728,18 +865,45 @@ async function fetchAndRenderMessages() {
 
       const ts = m.messageTimestamp;
       let time = '';
+      let msgDate = '';
+      let msgTs = 0;
       if (ts) {
         const num = typeof ts === 'string' ? parseInt(ts) : ts;
         const ms = num < 1e12 ? num * 1000 : num;
-        time = new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        msgTs = num;
+        const d = new Date(ms);
+        time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        msgDate = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      }
+
+      // Day separator
+      if (msgDate && msgDate !== prevDate) {
+        const sep = document.createElement('div');
+        sep.className = 'msg-day-separator';
+        const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        let label = msgDate;
+        if (msgDate === today) label = 'Hoje';
+        else if (msgDate === yesterday) label = 'Ontem';
+        sep.innerHTML = '<span>' + label + '</span>';
+        container.appendChild(sep);
+        prevDate = msgDate;
+        prevSenderJid = '';
+        prevTimestamp = 0;
       }
 
       const participantJid = key.participant || key.remoteJid;
+      const currentSenderKey = isOut ? '__me__' : (participantJid || '');
       const sender = !isOut ? (m.pushName || resolveContactName(participantJid)) : '';
+
+      // Grouping: same sender within 5 minutes
+      const isGrouped = currentSenderKey && currentSenderKey === prevSenderJid && msgTs && (msgTs - prevTimestamp) < 300;
+      prevSenderJid = currentSenderKey;
+      prevTimestamp = msgTs;
 
       // Build message bubble
       const wrapper = document.createElement('div');
-      wrapper.className = 'msg-wrapper' + (isOut ? ' msg-wrapper-out' : '');
+      wrapper.className = 'msg-wrapper' + (isOut ? ' msg-wrapper-out' : '') + (isGrouped ? ' msg-grouped' : '');
 
       const div = document.createElement('div');
       div.className = 'msg ' + (isOut ? 'msg-out' : 'msg-in');
@@ -1620,7 +1784,7 @@ async function init() {
       // Configure webhook
       if (webhookUrl) {
         api('POST', '/webhook/set/' + inst.name, {
-          webhook: { enabled: true, url: webhookUrl, byEvents: true, events: ['CONNECTION_UPDATE'] }
+          webhook: { enabled: true, url: webhookUrl, byEvents: false, events: ['CONNECTION_UPDATE', 'GROUP_PARTICIPANTS_UPDATE'] }
         }).catch(() => {});
       }
     }
@@ -1640,6 +1804,33 @@ function startSSE() {
 
   evtSource.addEventListener('connected', () => {
     sseConnected = true;
+  });
+
+  // Group participant events (join/leave/remove/promote/demote)
+  evtSource.addEventListener('group-participants.update', (e) => {
+    try {
+      const payload = JSON.parse(e.data);
+      const d = payload.data || payload;
+      const groupJid = d.id;
+      if (!groupJid || groupJid !== selectedGroup) return;
+
+      const action = d.action; // add, remove, promote, demote
+      const participants = d.participantsData || [];
+      const jids = d.participants || [];
+
+      const names = participants.map(p => p.name || formatPhone(p.phoneNumber || p.jid?.split('@')[0] || ''));
+      const jidNames = jids.map((jid, i) => names[i] || formatPhone(jid.split('@')[0]));
+
+      const actionLabels = { add: 'entrou no grupo', remove: 'saiu do grupo', promote: 'agora e admin', demote: 'nao e mais admin' };
+      const label = actionLabels[action] || action;
+
+      jidNames.forEach(name => {
+        appendSystemMessage(name + ' ' + label);
+      });
+
+      // Refresh participants panel if open
+      if (showPanel) loadParticipants();
+    } catch {}
   });
 
   evtSource.addEventListener('CONNECTION_UPDATE', (e) => {
