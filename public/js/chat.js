@@ -7,12 +7,12 @@ let showPanel = false;
 
 async function loadGroups() {
   if (!currentInstance) return;
-  if (!ensureConnected()) return;
 
   const list = document.getElementById('groupList');
   const cacheKey = 'groups_' + currentInstance;
+  const instanceAtStart = currentInstance; // guard against instance changing mid-fetch
 
-  // Show cached groups instantly while fetching fresh data
+  // Show cached groups for THIS instance while fetching
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
@@ -20,23 +20,28 @@ async function loadGroups() {
       renderGroupList();
     } catch {}
   } else {
+    groups = [];
     list.innerHTML = '<div style="padding:24px;text-align:center;color:#667781">Carregando grupos...</div>';
   }
 
   // Fetch fresh data with retries
   let res = null;
   for (let attempt = 0; attempt < 3; attempt++) {
+    if (currentInstance !== instanceAtStart) return; // instance changed, abort
     res = await api('GET', '/group/fetchAllGroups/' + currentInstance + '?getParticipants=false');
     if (res.ok && Array.isArray(res.data) && res.data.length > 0) break;
     if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
   }
 
+  // Abort if user switched instance during fetch
+  if (currentInstance !== instanceAtStart) return;
+
   const groupData = res && res.ok ? res.data : null;
 
   if (!groupData || !Array.isArray(groupData) || groupData.length === 0) {
-    // If we have cached data, keep showing it
     if (groups.length > 0) {
-      toast('Usando grupos em cache - conexao instavel', 'error');
+      // Only show cache warning if fetch actually failed (not just empty)
+      if (!res || !res.ok) toast('Usando grupos em cache - conexao instavel', 'error');
       return;
     }
     list.innerHTML = '<div class="no-groups"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg><p>' + (res && res.ok ? 'Nenhum grupo encontrado' : 'Erro ao carregar grupos - conexao instavel') + '</p></div>';
