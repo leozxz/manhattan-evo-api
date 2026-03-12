@@ -6,8 +6,9 @@
 *.env
 .env.*
 
-# Evolution API (cloned repo)
+# Evolution API (cloned repo & zip)
 evolution-api/
+evolution-api.zip
 
 # Node modules
 node_modules/

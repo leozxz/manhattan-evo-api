@@ -1,0 +1,16 @@
+{
+  "env": {
+    "node": true,
+    "browser": true,
+    "es2021": true
+  },
+  "parserOptions": {
+    "ecmaVersion": "latest"
+  },
+  "rules": {
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-script-url": "error",
+    "no-new-func": "error"
+  }
+}

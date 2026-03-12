@@ -1,9 +1,9 @@
 const http = require("http");
 const readline = require("readline");
 
-const BASE_URL = "http://localhost:8080";
-const API_KEY = "minha-api-key-evolution-2024";
-const INSTANCE_NAME = "minha-instancia";
+const BASE_URL = process.env.EVO_API_URL || "http://localhost:8080";
+const API_KEY = process.env.EVO_API_KEY || "";
+const INSTANCE_NAME = process.env.INSTANCE_NAME || "minha-instancia";
 
 const rl = readline.createInterface({
   input: process.stdin,
