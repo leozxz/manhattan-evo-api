@@ -115,9 +115,6 @@ async function createGroup() {
 
   toast('Grupo "' + name + '" criado!');
 
-  // Track group creation for dashboard metrics
-  api('POST', '/api/track', { instance: instName, type: 'group_created' });
-
   // Set group picture
   if (groupImageBase64) {
     toast('Enviando imagem do grupo...');
