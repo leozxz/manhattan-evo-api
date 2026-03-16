@@ -3,6 +3,8 @@
 // =====================
 let groupLastMsg = {}; // chatId -> timestamp of last message
 try { groupLastMsg = JSON.parse(localStorage.getItem('groupLastMsg') || '{}'); } catch {}
+let chatLastSeen = {}; // chatId -> timestamp when user last opened the chat
+try { chatLastSeen = JSON.parse(localStorage.getItem('chatLastSeen') || '{}'); } catch {}
 let showPanel = false;
 let chatFilter = 'all'; // 'all', 'groups', 'private'
 let allChats = []; // unified list: groups + individual chats
@@ -327,7 +329,8 @@ async function selectGroup(chat, el) {
   // Mark as read — find in allChats to ensure we modify the actual reference
   const chatRef = allChats.find(c => c.id === chat.id) || chat;
   chatRef.unreadCount = 0;
-  chatRef._lastSeenTs = Math.floor(Date.now() / 1000);
+  chatLastSeen[chat.id] = Math.floor(Date.now() / 1000);
+  try { localStorage.setItem('chatLastSeen', JSON.stringify(chatLastSeen)); } catch {}
   renderGroupList();
 
   document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
@@ -1532,15 +1535,24 @@ async function pollChatList() {
             changed = true;
           }
         } else if (!chat.isGroup) {
-          // Private chats: API returns null, check if last message is incoming and newer
+          // Private chats: API returns null, check if last message is incoming and newer than last seen
           const lastMsg = c.lastMessage;
           if (lastMsg && !lastMsg.key?.fromMe) {
             const msgTs = typeof lastMsg.messageTimestamp === 'string' ? parseInt(lastMsg.messageTimestamp) : (lastMsg.messageTimestamp || 0);
-            const lastSeen = chat._lastSeenTs || 0;
-            if (msgTs > lastSeen && chat.unreadCount === 0) {
-              chat.unreadCount = 1; // At least 1 unread
+            const lastSeen = chatLastSeen[jid] || 0;
+            if (msgTs > lastSeen) {
+              if (chat.unreadCount === 0) {
+                chat.unreadCount = 1;
+                changed = true;
+              }
+            } else if (chat.unreadCount > 0) {
+              chat.unreadCount = 0;
               changed = true;
             }
+          } else if (chat.unreadCount > 0) {
+            // Last message is fromMe or no message — clear unread
+            chat.unreadCount = 0;
+            changed = true;
           }
         }
       }
