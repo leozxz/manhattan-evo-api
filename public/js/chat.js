@@ -1492,8 +1492,12 @@ function highlightMentions(escapedHtml) {
   });
 }
 
+let chatListPollInterval = null;
+
 function startMsgPolling() {
   stopMsgPolling();
+  // Always poll chat list for unread counts + reordering
+  chatListPollInterval = setInterval(pollChatList, 5000);
   if (!selectedGroup) return;
   document.getElementById('pollingIndicator')?.style.setProperty('display', 'flex');
   msgPollInterval = setInterval(fetchAndRenderMessages, 3000);
@@ -1501,8 +1505,55 @@ function startMsgPolling() {
 
 function stopMsgPolling() {
   if (msgPollInterval) { clearInterval(msgPollInterval); msgPollInterval = null; }
+  if (chatListPollInterval) { clearInterval(chatListPollInterval); chatListPollInterval = null; }
   lastMsgCount = 0;
   document.getElementById('pollingIndicator')?.style.setProperty('display', 'none');
+}
+
+async function pollChatList() {
+  if (!currentInstance) return;
+  try {
+    const res = await api('POST', '/chat/findChats/' + currentInstance, {});
+    if (!res.ok || !Array.isArray(res.data)) return;
+    let changed = false;
+
+    res.data.forEach(c => {
+      const jid = c.remoteJid;
+      if (!jid || jid === 'status@broadcast' || jid === '0@s.whatsapp.net') return;
+
+      const chat = allChats.find(ch => ch.id === jid);
+      if (!chat) return;
+
+      // Update unread count (skip currently open chat)
+      if (jid !== selectedGroup) {
+        const apiUnread = c.unreadCount;
+        if (apiUnread != null && apiUnread !== chat.unreadCount) {
+          chat.unreadCount = apiUnread;
+          changed = true;
+        }
+      }
+
+      // Update timestamp from lastMessage
+      const ts = c.lastMessage?.messageTimestamp;
+      if (ts) {
+        const numTs = typeof ts === 'string' ? parseInt(ts) : ts;
+        if (numTs > (groupLastMsg[jid] || 0)) {
+          groupLastMsg[jid] = numTs;
+          changed = true;
+        }
+      }
+
+      // Update contact name
+      if (c.lastMessage?.pushName && !c.lastMessage.key?.fromMe) {
+        contactNames[jid] = c.lastMessage.pushName;
+      }
+    });
+
+    if (changed) {
+      saveGroupTimestamps();
+      renderGroupList();
+    }
+  } catch {}
 }
 
 // CHAT SEARCH
