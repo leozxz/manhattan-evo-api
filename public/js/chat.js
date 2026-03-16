@@ -1672,6 +1672,8 @@ function handleMediaFile(input) {
     if (res.ok && res.data && res.data.key) {
       div.querySelector('.msg-time').textContent = now;
       toast('Midia enviada!');
+      const isGroup = selectedGroup.endsWith('@g.us');
+      api('POST', '/api/track', { instance: currentInstance, type: 'sent', isGroup, contact: selectedGroup.split('@')[0] });
     } else {
       div.querySelector('.msg-time').innerHTML = now + ' <span style="color:#ea0038">erro</span>';
       toast('Erro ao enviar midia', 'error');
@@ -1833,6 +1835,8 @@ async function sendQuickAudio(index) {
       toast('Audio "' + a.name + '" enviado!');
       lastMsgCount = 0;
       fetchAndRenderMessages();
+      const isGroup = selectedGroup.endsWith('@g.us');
+      api('POST', '/api/track', { instance: currentInstance, type: 'sent', isGroup, contact: selectedGroup.split('@')[0] });
     } else {
       toast('Erro ao enviar audio', 'error');
     }
@@ -1903,6 +1907,8 @@ async function toggleRecording() {
         toast('Audio enviado!');
         lastMsgCount = 0;
         fetchAndRenderMessages();
+        const isGroup = selectedGroup.endsWith('@g.us');
+        api('POST', '/api/track', { instance: currentInstance, type: 'sent', isGroup, contact: selectedGroup.split('@')[0] });
       } else {
         toast('Erro ao enviar audio gravado', 'error');
       }

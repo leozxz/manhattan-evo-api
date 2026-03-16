@@ -435,6 +435,41 @@ http.createServer((req, res) => {
     return;
   }
 
+  // Fix webhooks for existing instances (ensures MESSAGES_UPSERT is tracked)
+  if (req.method === 'POST' && urlPath === '/api/fix-webhooks') {
+    let body = '';
+    req.on('data', c => { if (body.length < 8192) body += c; });
+    req.on('end', () => {
+      try {
+        const { instances: instList } = JSON.parse(body);
+        if (Array.isArray(instList)) {
+          instList.forEach(instName => {
+            const webhookBody = JSON.stringify({
+              webhook: {
+                enabled: true,
+                url: WEBHOOK_URL,
+                byEvents: false,
+                events: ['CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'GROUPS_UPSERT', 'GROUP_PARTICIPANTS_UPDATE']
+              }
+            });
+            const url = new URL('/webhook/set/' + instName, EVO_API_URL);
+            const client = url.protocol === 'https:' ? https : http;
+            const wreq = client.request({
+              hostname: url.hostname, port: url.port || undefined,
+              path: url.pathname, method: 'POST',
+              headers: { 'apikey': EVO_API_KEY, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(webhookBody) }
+            }, () => {});
+            wreq.on('error', () => {});
+            wreq.end(webhookBody);
+          });
+        }
+      } catch {}
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('{"ok":true}');
+    });
+    return;
+  }
+
   // Proxy API routes to Evolution API (server-side, key never exposed)
   const apiPrefixes = ['/instance/', '/message/', '/chat/', '/group/', '/webhook/'];
   if (apiPrefixes.some(p => urlPath.startsWith(p))) {

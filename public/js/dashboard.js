@@ -6,9 +6,18 @@ let dashboardInterval = null;
 let dashboardData = null;
 
 function startDashboard() {
+  fixWebhooks();
   loadDashboard();
   if (dashboardInterval) clearInterval(dashboardInterval);
   dashboardInterval = setInterval(loadDashboard, 15000); // refresh every 15s
+}
+
+// Ensure all instances have MESSAGES_UPSERT webhook configured
+function fixWebhooks() {
+  const connected = instances.filter(i => i.state === 'open').map(i => i.name);
+  if (connected.length > 0) {
+    api('POST', '/api/fix-webhooks', { instances: connected });
+  }
 }
 
 function stopDashboard() {
