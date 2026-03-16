@@ -58,15 +58,21 @@ async function loadGroups() {
   const chatMap = {};
   chatData.forEach(c => {
     const jid = c.remoteJid;
-    if (!jid || jid === 'status@broadcast') return;
+    if (!jid || jid === 'status@broadcast' || jid === '0@s.whatsapp.net') return;
     const lastTs = c.lastMessage?.messageTimestamp || 0;
     const gm = groupMeta[jid];
+
+    // For private chats, try to get name from lastMessage.pushName (findChats often has null pushName for private)
+    let resolvedName = c.pushName || '';
+    if (!resolvedName && c.lastMessage?.pushName && !c.lastMessage.key?.fromMe) {
+      resolvedName = c.lastMessage.pushName;
+    }
 
     chatMap[jid] = {
       id: jid,
       isGroup: isGroupJid(jid),
-      subject: gm?.subject || c.pushName || '',
-      pushName: c.pushName || '',
+      subject: gm?.subject || resolvedName || '',
+      pushName: resolvedName || '',
       size: gm?.size || 0,
       profilePicUrl: c.profilePicUrl || null,
       lastMessageTs: typeof lastTs === 'string' ? parseInt(lastTs) : lastTs,
@@ -74,7 +80,7 @@ async function loadGroups() {
     };
 
     // Store contact name
-    if (c.pushName && !contactNames[jid]) contactNames[jid] = c.pushName;
+    if (resolvedName && !contactNames[jid]) contactNames[jid] = resolvedName;
     if (lastTs > (groupLastMsg[jid] || 0)) groupLastMsg[jid] = typeof lastTs === 'string' ? parseInt(lastTs) : lastTs;
   });
 
