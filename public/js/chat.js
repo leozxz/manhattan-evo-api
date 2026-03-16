@@ -266,7 +266,8 @@ function renderGroupList() {
 
   sorted.forEach(c => {
     const item = document.createElement('div');
-    item.className = 'chat-item' + (selectedGroup === c.id ? ' active' : '');
+    const hasUnread = c.unreadCount > 0 && selectedGroup !== c.id;
+    item.className = 'chat-item' + (selectedGroup === c.id ? ' active' : '') + (hasUnread ? ' chat-item-unread' : '');
     item.onclick = () => { selectGroup(c, item); };
     const lastTs = groupLastMsg[c.id] || c.lastMessageTs;
     const timeStr = lastTs ? new Date(lastTs < 1e12 ? lastTs * 1000 : lastTs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -305,7 +306,7 @@ function renderGroupList() {
         <div class="chat-preview">${escapeHtml(subtitle)}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        ${timeStr ? '<span style="font-size:11px;color:#667781">' + timeStr + '</span>' : ''}
+        ${timeStr ? '<span class="chat-time" style="font-size:11px;color:#667781">' + timeStr + '</span>' : ''}
         ${unreadBadge}
       </div>
     `;
@@ -322,6 +323,14 @@ async function selectGroup(chat, el) {
   closeMentionDropdown();
 
   const isGroup = chat.isGroup !== undefined ? chat.isGroup : isGroupJid(chat.id);
+
+  // Mark as read
+  if (chat.unreadCount > 0) {
+    chat.unreadCount = 0;
+    renderGroupList();
+    // Tell Evolution API to mark as read
+    api('POST', '/chat/markChatUnread/' + currentInstance, { chat: chat.id, unread: false }).catch(() => {});
+  }
 
   document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
   if (el) el.classList.add('active');
@@ -2189,6 +2198,29 @@ function startSSE() {
       // Refresh participants panel if open
       if (showPanel) loadParticipants();
     } catch (err) { console.error('SSE group event error:', err); }
+  });
+
+  // Incoming message — increment unread count for chats not currently open
+  evtSource.addEventListener('messages.upsert', (e) => {
+    try {
+      const payload = JSON.parse(e.data);
+      const d = payload.data || payload;
+      const key = d.key || d.message?.key || {};
+      if (key.fromMe) return; // our own messages don't count as unread
+      const remoteJid = key.remoteJid;
+      if (!remoteJid || remoteJid === selectedGroup) return;
+      const chat = allChats.find(c => c.id === remoteJid);
+      if (chat) {
+        chat.unreadCount = (chat.unreadCount || 0) + 1;
+        // Update timestamp
+        const ts = d.messageTimestamp || d.message?.messageTimestamp;
+        if (ts) {
+          const numTs = typeof ts === 'string' ? parseInt(ts) : ts;
+          if (numTs > (groupLastMsg[remoteJid] || 0)) groupLastMsg[remoteJid] = numTs;
+        }
+        renderGroupList();
+      }
+    } catch {}
   });
 
   evtSource.addEventListener('CONNECTION_UPDATE', (e) => {
