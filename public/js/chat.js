@@ -1493,8 +1493,12 @@ function highlightMentions(escapedHtml) {
   });
 }
 
+let unreadPollInterval = null;
+
 function startMsgPolling() {
   stopMsgPolling();
+  // Always poll unread counts when on chat page
+  unreadPollInterval = setInterval(pollUnreadCounts, 10000);
   if (!selectedGroup) return;
   document.getElementById('pollingIndicator')?.style.setProperty('display', 'flex');
   msgPollInterval = setInterval(fetchAndRenderMessages, 3000);
@@ -1502,8 +1506,43 @@ function startMsgPolling() {
 
 function stopMsgPolling() {
   if (msgPollInterval) { clearInterval(msgPollInterval); msgPollInterval = null; }
+  if (unreadPollInterval) { clearInterval(unreadPollInterval); unreadPollInterval = null; }
   lastMsgCount = 0;
   document.getElementById('pollingIndicator')?.style.setProperty('display', 'none');
+}
+
+async function pollUnreadCounts() {
+  if (!currentInstance) return;
+  try {
+    const res = await api('POST', '/chat/findChats/' + currentInstance, {});
+    if (!res.ok || !Array.isArray(res.data)) return;
+    let changed = false;
+    res.data.forEach(c => {
+      const jid = c.remoteJid;
+      if (!jid) return;
+      const chat = allChats.find(ch => ch.id === jid);
+      if (!chat) return;
+      const newUnread = c.unreadCount || 0;
+      // Only update if different (and not the currently open chat)
+      if (jid !== selectedGroup && newUnread !== chat.unreadCount) {
+        chat.unreadCount = newUnread;
+        changed = true;
+      }
+      // Update timestamp from lastMessage
+      const ts = c.lastMessage?.messageTimestamp;
+      if (ts) {
+        const numTs = typeof ts === 'string' ? parseInt(ts) : ts;
+        if (numTs > (groupLastMsg[jid] || 0)) {
+          groupLastMsg[jid] = numTs;
+          changed = true;
+        }
+      }
+    });
+    if (changed) {
+      saveGroupTimestamps();
+      renderGroupList();
+    }
+  } catch {}
 }
 
 // CHAT SEARCH
@@ -2200,19 +2239,18 @@ function startSSE() {
     } catch (err) { console.error('SSE group event error:', err); }
   });
 
-  // Incoming message — increment unread count for chats not currently open
-  evtSource.addEventListener('messages.upsert', (e) => {
+  // Incoming message — catch any message event to update unread badges
+  const handleMsgEvent = (e) => {
     try {
       const payload = JSON.parse(e.data);
       const d = payload.data || payload;
       const key = d.key || d.message?.key || {};
-      if (key.fromMe) return; // our own messages don't count as unread
+      if (key.fromMe) return;
       const remoteJid = key.remoteJid;
       if (!remoteJid || remoteJid === selectedGroup) return;
       const chat = allChats.find(c => c.id === remoteJid);
       if (chat) {
         chat.unreadCount = (chat.unreadCount || 0) + 1;
-        // Update timestamp
         const ts = d.messageTimestamp || d.message?.messageTimestamp;
         if (ts) {
           const numTs = typeof ts === 'string' ? parseInt(ts) : ts;
@@ -2221,7 +2259,11 @@ function startSSE() {
         renderGroupList();
       }
     } catch {}
-  });
+  };
+  // Listen for all possible event name variations
+  evtSource.addEventListener('messages.upsert', handleMsgEvent);
+  evtSource.addEventListener('MESSAGES_UPSERT', handleMsgEvent);
+  evtSource.addEventListener('message', handleMsgEvent);
 
   evtSource.addEventListener('CONNECTION_UPDATE', (e) => {
     try {
