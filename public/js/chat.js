@@ -59,6 +59,8 @@ async function loadGroups() {
   chatData.forEach(c => {
     const jid = c.remoteJid;
     if (!jid || jid === 'status@broadcast' || jid === '0@s.whatsapp.net') return;
+    // Skip LID-only JIDs (internal WhatsApp IDs with no phone number)
+    if (jid.endsWith('@lid')) return;
     const lastTs = c.lastMessage?.messageTimestamp || 0;
     const gm = groupMeta[jid];
 
@@ -68,11 +70,15 @@ async function loadGroups() {
       resolvedName = c.lastMessage.pushName;
     }
 
+    // For private chats, resolve phone number for display
+    const phone = isPrivateJid(jid) ? jid.split('@')[0] : '';
+
     chatMap[jid] = {
       id: jid,
       isGroup: isGroupJid(jid),
       subject: gm?.subject || resolvedName || '',
       pushName: resolvedName || '',
+      phone: phone,
       size: gm?.size || 0,
       profilePicUrl: c.profilePicUrl || null,
       lastMessageTs: typeof lastTs === 'string' ? parseInt(lastTs) : lastTs,
@@ -198,9 +204,11 @@ function renderGroupList() {
       subtitle = (c.size || '?') + ' participantes';
     } else {
       avatarSvg = '<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
-      const phone = c.id.split('@')[0];
-      displayName = c.pushName || contactNames[c.id] || formatPhone(phone);
-      subtitle = c.pushName ? formatPhone(phone) : '';
+      const phone = c.phone || c.id.split('@')[0];
+      const formattedPhone = formatPhone(phone);
+      const contactName = c.pushName || contactNames[c.id] || '';
+      displayName = contactName || formattedPhone;
+      subtitle = contactName ? formattedPhone : '';
     }
 
     const unreadBadge = c.unreadCount > 0 ? '<span class="chat-unread-badge">' + c.unreadCount + '</span>' : '';
@@ -246,8 +254,10 @@ async function selectGroup(chat, el) {
     displayName = chat.subject || chat.id;
     avatarSvg = '<svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3z"/></svg>';
   } else {
-    const phone = chat.id.split('@')[0];
-    displayName = chat.pushName || contactNames[chat.id] || formatPhone(phone);
+    const phone = chat.phone || chat.id.split('@')[0];
+    const formattedPhone = formatPhone(phone);
+    const contactName = chat.pushName || contactNames[chat.id] || '';
+    displayName = contactName || formattedPhone;
     avatarSvg = '<svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
   }
 
@@ -1568,7 +1578,10 @@ async function sendMsg() {
   }
 
   const res = await api('POST', '/message/sendText/' + currentInstance, body);
-  if (!res.ok || !res.data || !res.data.key) {
+  if (res.ok && res.data && res.data.key) {
+    const isGroup = selectedGroup.endsWith('@g.us');
+    api('POST', '/api/track', { instance: currentInstance, type: 'sent', isGroup, contact: selectedGroup.split('@')[0] });
+  } else {
     const errMsg = res.data?.response?.message;
     const isConnErr = typeof errMsg === 'string' && errMsg.includes('Connection') || (Array.isArray(errMsg) && errMsg.some(e => String(e).includes('Connection')));
     toast(isConnErr ? 'Conexao instavel, tente novamente' : 'Erro ao enviar mensagem', 'error');
