@@ -131,18 +131,23 @@
         <div class="chat-layout">
           <div class="chat-list">
             <div class="chat-list-header" style="display:flex;align-items:center;justify-content:space-between">
-              <span>Grupos</span>
+              <span>Conversas</span>
               <div class="polling-indicator" id="pollingIndicator" style="display:none">
                 <div class="polling-dot"></div> ao vivo
               </div>
             </div>
+            <div class="chat-filter-tabs">
+              <button class="chat-filter-tab active" data-filter="all" onclick="setChatFilter('all')">Todos</button>
+              <button class="chat-filter-tab" data-filter="groups" onclick="setChatFilter('groups')">Grupos</button>
+              <button class="chat-filter-tab" data-filter="private" onclick="setChatFilter('private')">Conversas</button>
+            </div>
             <div class="chat-search">
-              <input type="text" class="chat-search-input" id="chatSearchInput" placeholder="Buscar mensagens..." oninput="handleChatSearch(this.value)">
+              <input type="text" class="chat-search-input" id="chatSearchInput" placeholder="Buscar conversas..." oninput="handleChatSearch(this.value)">
             </div>
             <div class="chat-list-body" id="groupList">
               <div class="no-groups">
                 <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg>
-                <p>Nenhum grupo ainda</p>
+                <p>Nenhuma conversa ainda</p>
               </div>
             </div>
             <div class="chat-list-body" id="searchResults" style="display:none"></div>
@@ -150,7 +155,7 @@
           <div class="chat-messages-area" id="chatArea">
             <div class="empty-chat">
               <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg>
-              Selecione um grupo para ver as mensagens
+              Selecione uma conversa para ver as mensagens
             </div>
           </div>
         </div>

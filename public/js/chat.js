@@ -1,58 +1,110 @@
 // =====================
 // CHAT
 // =====================
-let groupLastMsg = {}; // groupId -> timestamp of last message
+let groupLastMsg = {}; // chatId -> timestamp of last message
 try { groupLastMsg = JSON.parse(localStorage.getItem('groupLastMsg') || '{}'); } catch {}
 let showPanel = false;
+let chatFilter = 'all'; // 'all', 'groups', 'private'
+let allChats = []; // unified list: groups + individual chats
+
+function isGroupJid(jid) { return jid && jid.endsWith('@g.us'); }
+function isPrivateJid(jid) { return jid && jid.endsWith('@s.whatsapp.net'); }
+
+function setChatFilter(filter) {
+  chatFilter = filter;
+  document.querySelectorAll('.chat-filter-tab').forEach(t => t.classList.toggle('active', t.dataset.filter === filter));
+  renderGroupList();
+}
 
 async function loadGroups() {
   if (!currentInstance) return;
 
   const list = document.getElementById('groupList');
-  const cacheKey = 'groups_' + currentInstance;
-  const instanceAtStart = currentInstance; // guard against instance changing mid-fetch
+  const cacheKey = 'chats_' + currentInstance;
+  const instanceAtStart = currentInstance;
 
-  // Show cached groups for THIS instance while fetching
+  // Show cached data while fetching
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
-      groups = JSON.parse(cached);
+      allChats = JSON.parse(cached);
+      groups = allChats.filter(c => isGroupJid(c.id));
       renderGroupList();
     } catch {}
   } else {
+    allChats = [];
     groups = [];
-    list.innerHTML = '<div style="padding:24px;text-align:center;color:#667781">Carregando grupos...</div>';
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:#667781">Carregando conversas...</div>';
   }
 
-  // Fetch fresh data with retries
-  let res = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (currentInstance !== instanceAtStart) return; // instance changed, abort
-    res = await api('GET', '/group/fetchAllGroups/' + currentInstance + '?getParticipants=false');
-    if (res.ok && Array.isArray(res.data) && res.data.length > 0) break;
-    if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
-  }
+  // Fetch all chats (groups + individual) from findChats
+  const [chatsRes, groupsRes] = await Promise.all([
+    api('POST', '/chat/findChats/' + currentInstance, {}),
+    api('GET', '/group/fetchAllGroups/' + currentInstance + '?getParticipants=false')
+  ]);
 
-  // Abort if user switched instance during fetch
   if (currentInstance !== instanceAtStart) return;
 
-  const groupData = res && res.ok ? res.data : null;
+  // Build group metadata map from fetchAllGroups (has subject, size)
+  const groupMeta = {};
+  if (groupsRes.ok && Array.isArray(groupsRes.data)) {
+    groupsRes.data.forEach(g => { groupMeta[g.id] = g; });
+  }
 
-  if (!groupData || !Array.isArray(groupData) || groupData.length === 0) {
-    if (groups.length > 0) {
-      // Only show cache warning if fetch actually failed (not just empty)
-      if (!res || !res.ok) toast('Usando grupos em cache - conexao instavel', 'error');
-      return;
+  // Process findChats response
+  const chatData = chatsRes.ok && Array.isArray(chatsRes.data) ? chatsRes.data : [];
+
+  // Build unified chat list
+  const chatMap = {};
+  chatData.forEach(c => {
+    const jid = c.remoteJid;
+    if (!jid || jid === 'status@broadcast') return;
+    const lastTs = c.lastMessage?.messageTimestamp || 0;
+    const gm = groupMeta[jid];
+
+    chatMap[jid] = {
+      id: jid,
+      isGroup: isGroupJid(jid),
+      subject: gm?.subject || c.pushName || '',
+      pushName: c.pushName || '',
+      size: gm?.size || 0,
+      profilePicUrl: c.profilePicUrl || null,
+      lastMessageTs: typeof lastTs === 'string' ? parseInt(lastTs) : lastTs,
+      unreadCount: c.unreadCount || 0
+    };
+
+    // Store contact name
+    if (c.pushName && !contactNames[jid]) contactNames[jid] = c.pushName;
+    if (lastTs > (groupLastMsg[jid] || 0)) groupLastMsg[jid] = typeof lastTs === 'string' ? parseInt(lastTs) : lastTs;
+  });
+
+  // Ensure all groups from fetchAllGroups are included (even if no recent chat)
+  Object.values(groupMeta).forEach(g => {
+    if (!chatMap[g.id]) {
+      chatMap[g.id] = {
+        id: g.id,
+        isGroup: true,
+        subject: g.subject || '',
+        pushName: '',
+        size: g.size || 0,
+        profilePicUrl: null,
+        lastMessageTs: groupLastMsg[g.id] || 0,
+        unreadCount: 0
+      };
     }
-    list.innerHTML = '<div class="no-groups"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg><p>' + (res && res.ok ? 'Nenhum grupo encontrado' : 'Erro ao carregar grupos - conexao instavel') + '</p></div>';
-    groups = [];
+  });
+
+  allChats = Object.values(chatMap);
+  groups = allChats.filter(c => c.isGroup);
+
+  if (allChats.length === 0) {
+    list.innerHTML = '<div class="no-groups"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg><p>' + (chatsRes.ok ? 'Nenhuma conversa encontrada' : 'Erro ao carregar conversas') + '</p></div>';
     return;
   }
 
-  groups = groupData;
-  try { localStorage.setItem(cacheKey, JSON.stringify(groupData)); } catch {}
+  try { localStorage.setItem(cacheKey, JSON.stringify(allChats)); } catch {}
+  saveGroupTimestamps();
   renderGroupList();
-  fetchGroupTimestamps(groupData);
 }
 
 function saveGroupTimestamps() {
@@ -103,42 +155,76 @@ function renderGroupList() {
   const list = document.getElementById('groupList');
   if (!list) return;
 
-  // Sort groups: ones with recent messages first, then by name
-  const sorted = [...groups].sort((a, b) => {
-    const tsA = groupLastMsg[a.id] || 0;
-    const tsB = groupLastMsg[b.id] || 0;
+  // Filter based on active tab
+  let filtered = allChats;
+  if (chatFilter === 'groups') filtered = allChats.filter(c => c.isGroup);
+  else if (chatFilter === 'private') filtered = allChats.filter(c => !c.isGroup);
+
+  // Sort: ones with recent messages first, then by name
+  const sorted = [...filtered].sort((a, b) => {
+    const tsA = groupLastMsg[a.id] || a.lastMessageTs || 0;
+    const tsB = groupLastMsg[b.id] || b.lastMessageTs || 0;
     if (tsB !== tsA) return tsB - tsA;
-    return (a.subject || '').localeCompare(b.subject || '');
+    const nameA = a.subject || a.pushName || a.id;
+    const nameB = b.subject || b.pushName || b.id;
+    return nameA.localeCompare(nameB);
   });
 
   list.innerHTML = '';
-  sorted.forEach(g => {
+  if (sorted.length === 0) {
+    const labels = { all: 'Nenhuma conversa', groups: 'Nenhum grupo', private: 'Nenhuma conversa individual' };
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:#667781;font-size:13px">' + labels[chatFilter] + '</div>';
+    return;
+  }
+
+  sorted.forEach(c => {
     const item = document.createElement('div');
-    item.className = 'chat-item' + (selectedGroup === g.id ? ' active' : '');
-    item.onclick = () => { selectGroup(g, item); };
-    const lastTs = groupLastMsg[g.id];
+    item.className = 'chat-item' + (selectedGroup === c.id ? ' active' : '');
+    item.onclick = () => { selectGroup(c, item); };
+    const lastTs = groupLastMsg[c.id] || c.lastMessageTs;
     const timeStr = lastTs ? new Date(lastTs < 1e12 ? lastTs * 1000 : lastTs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+
+    // Different avatar and info for groups vs individual
+    let avatarSvg, displayName, subtitle;
+    if (c.isGroup) {
+      avatarSvg = '<svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>';
+      displayName = c.subject || c.id;
+      subtitle = (c.size || '?') + ' participantes';
+    } else {
+      avatarSvg = '<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+      const phone = c.id.split('@')[0];
+      displayName = c.pushName || contactNames[c.id] || formatPhone(phone);
+      subtitle = c.pushName ? formatPhone(phone) : '';
+    }
+
+    const unreadBadge = c.unreadCount > 0 ? '<span class="chat-unread-badge">' + c.unreadCount + '</span>' : '';
+
     item.innerHTML = `
-      <div class="chat-avatar">
-        <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+      <div class="chat-avatar${c.isGroup ? '' : ' chat-avatar-private'}">
+        ${avatarSvg}
       </div>
       <div class="chat-info">
-        <div class="chat-name">${escapeHtml(g.subject || g.id)}</div>
-        <div class="chat-preview">${g.size || '?'} participantes</div>
+        <div class="chat-name">${escapeHtml(displayName)}</div>
+        <div class="chat-preview">${escapeHtml(subtitle)}</div>
       </div>
-      ${timeStr ? '<span style="font-size:11px;color:#667781">' + timeStr + '</span>' : ''}
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        ${timeStr ? '<span style="font-size:11px;color:#667781">' + timeStr + '</span>' : ''}
+        ${unreadBadge}
+      </div>
     `;
     list.appendChild(item);
   });
 }
 
-async function selectGroup(group, el) {
-  selectedGroup = group.id;
-  selectedGroupData = group;
+async function selectGroup(chat, el) {
+  selectedGroup = chat.id;
+  selectedGroupData = chat;
   showPanel = false;
   mediaCacheClear();
   cancelReply();
   closeMentionDropdown();
+
+  const isGroup = isGroupJid(chat.id);
 
   document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
   if (el) el.classList.add('active');
@@ -146,6 +232,23 @@ async function selectGroup(group, el) {
   // Mobile: open chat view
   const layout = document.querySelector('.chat-layout');
   if (layout) layout.classList.add('chat-open');
+
+  // Resolve display name for individual chats
+  let displayName;
+  let avatarSvg;
+  if (isGroup) {
+    displayName = chat.subject || chat.id;
+    avatarSvg = '<svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3z"/></svg>';
+  } else {
+    const phone = chat.id.split('@')[0];
+    displayName = chat.pushName || contactNames[chat.id] || formatPhone(phone);
+    avatarSvg = '<svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+  }
+
+  const panelBtn = isGroup ? `
+          <button class="btn btn-secondary btn-sm" onclick="togglePanel()" title="Ver participantes" style="margin-left:8px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#54656f"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          </button>` : '';
 
   const area = document.getElementById('chatArea');
   area.innerHTML = `
@@ -155,15 +258,13 @@ async function selectGroup(group, el) {
           <button class="mobile-back-btn" onclick="closeMobileChat()" title="Voltar">
             <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
           </button>
-          <div class="chat-avatar" style="width:36px;height:36px">
-            <svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3z"/></svg>
+          <div class="chat-avatar${isGroup ? '' : ' chat-avatar-private'}" style="width:36px;height:36px">
+            ${avatarSvg}
           </div>
-          <div class="chat-name" style="cursor:pointer" onclick="togglePanel()">${escapeHtml(group.subject || group.id)}</div>
+          <div class="chat-name" style="cursor:pointer" ${isGroup ? 'onclick="togglePanel()"' : ''}>${escapeHtml(displayName)}</div>
           <div class="header-spacer"></div>
           <div class="polling-indicator"><div class="polling-dot"></div> ao vivo</div>
-          <button class="btn btn-secondary btn-sm" onclick="togglePanel()" title="Ver participantes" style="margin-left:8px">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="#54656f"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-          </button>
+          ${panelBtn}
         </div>
         <div class="chat-messages" id="msgContainer">
           <div class="spinner" style="margin:auto"></div>
@@ -214,7 +315,7 @@ async function selectGroup(group, el) {
           </button>
         </div>
       </div>
-      <div class="group-panel" id="groupPanel" style="display:none">
+      ${isGroup ? `<div class="group-panel" id="groupPanel" style="display:none">
         <div class="group-panel-header">
           <div class="panel-tabs">
             <button class="panel-tab active" data-tab="participants" onclick="switchPanelTab('participants')">Participantes</button>
@@ -225,12 +326,12 @@ async function selectGroup(group, el) {
         <div class="group-panel-body" id="panelBody">
           <div class="spinner" style="margin-top:40px"></div>
         </div>
-      </div>
+      </div>` : ''}
     </div>
   `;
 
   await fetchAndRenderMessages();
-  loadCachedParticipants(); // load after messages so contactNames has pushNames
+  if (isGroup) loadCachedParticipants();
   renderPinnedBanner();
   startMsgPolling();
 }
@@ -1034,7 +1135,9 @@ async function fetchAndRenderMessages() {
 
       const participantJid = key.participant || key.remoteJid;
       const currentSenderKey = isOut ? '__me__' : (participantJid || '');
-      const sender = !isOut ? (m.pushName || resolveContactName(participantJid)) : '';
+      const isPrivateChat = isPrivateJid(selectedGroup);
+      // In private chats, don't show sender name (it's always the same person)
+      const sender = (!isOut && !isPrivateChat) ? (m.pushName || resolveContactName(participantJid)) : '';
 
       // Grouping: same sender within 5 minutes
       const isGrouped = currentSenderKey && currentSenderKey === prevSenderJid && msgTs && (msgTs - prevTimestamp) < 300;
@@ -1307,26 +1410,26 @@ function handleChatSearch(query) {
 }
 
 async function searchMessages(query) {
-  if (!currentInstance || groups.length === 0) return;
+  if (!currentInstance || allChats.length === 0) return;
 
   const groupListEl = document.getElementById('groupList');
   const searchResultsEl = document.getElementById('searchResults');
 
   groupListEl.style.display = 'none';
   searchResultsEl.style.display = '';
-  searchResultsEl.innerHTML = '<div class="search-status"><div class="spinner" style="margin-bottom:8px"></div>Buscando em ' + groups.length + ' grupos...</div>';
+  searchResultsEl.innerHTML = '<div class="search-status"><div class="spinner" style="margin-bottom:8px"></div>Buscando em ' + allChats.length + ' conversas...</div>';
 
   const results = [];
   const queryLower = query.toLowerCase();
 
-  // Search in all groups in parallel (batches of 5 to avoid overload)
+  // Search in all chats in parallel (batches of 5 to avoid overload)
   const batchSize = 5;
-  for (let i = 0; i < groups.length; i += batchSize) {
-    const batch = groups.slice(i, i + batchSize);
-    const promises = batch.map(async (group) => {
+  for (let i = 0; i < allChats.length; i += batchSize) {
+    const batch = allChats.slice(i, i + batchSize);
+    const promises = batch.map(async (chat) => {
       try {
         const res = await api('POST', '/chat/findMessages/' + currentInstance, {
-          where: { key: { remoteJid: group.id } },
+          where: { key: { remoteJid: chat.id } },
           offset: 100,
           page: 1
         });
@@ -1339,9 +1442,9 @@ async function searchMessages(query) {
           }
         });
         if (matches.length > 0) {
-          results.push({ group, matches });
+          results.push({ group: chat, matches });
         }
-      } catch (e) { /* skip group on error */ }
+      } catch (e) { /* skip chat on error */ }
     });
     await Promise.all(promises);
   }
@@ -1384,8 +1487,9 @@ function renderSearchResults(results, query) {
       const preview = highlightSearchTerm(match.text, queryLower);
       const sender = match.sender ? escapeHtml(match.sender) + ': ' : '';
 
+      const chatLabel = r.group.subject || r.group.pushName || contactNames[r.group.id] || formatPhone(r.group.id.split('@')[0]);
       item.innerHTML = `
-        <div class="search-result-group">${escapeHtml(r.group.subject || r.group.id)}</div>
+        <div class="search-result-group">${escapeHtml(chatLabel)}</div>
         <div class="search-result-preview">${sender}${preview}</div>
       `;
       searchResultsEl.appendChild(item);
@@ -1734,7 +1838,7 @@ async function toggleRecording() {
   }
   // Start recording
   if (!ensureConnected()) return;
-  if (!selectedGroup) return toast('Selecione um grupo primeiro', 'error');
+  if (!selectedGroup) return toast('Selecione uma conversa primeiro', 'error');
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
