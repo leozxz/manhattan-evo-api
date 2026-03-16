@@ -59,10 +59,11 @@ async function loadGroups() {
   chatData.forEach(c => {
     const jid = c.remoteJid;
     if (!jid || jid === 'status@broadcast' || jid === '0@s.whatsapp.net') return;
-    // Skip LID-only JIDs (internal WhatsApp IDs with no phone number)
-    if (jid.endsWith('@lid')) return;
     const lastTs = c.lastMessage?.messageTimestamp || 0;
     const gm = groupMeta[jid];
+    const isLid = jid.endsWith('@lid');
+    const isPrivate = isPrivateJid(jid) || isLid;
+    const isGroup = isGroupJid(jid);
 
     // For private chats, try to get name from lastMessage.pushName (findChats often has null pushName for private)
     let resolvedName = c.pushName || '';
@@ -71,11 +72,19 @@ async function loadGroups() {
     }
 
     // For private chats, resolve phone number for display
-    const phone = isPrivateJid(jid) ? jid.split('@')[0] : '';
+    // LID JIDs don't have phone numbers, try to get from lastMessage key
+    let phone = '';
+    if (isPrivateJid(jid)) {
+      phone = jid.split('@')[0];
+    } else if (isLid && c.lastMessage?.key) {
+      // Try participantAlt or other fields that might have the real phone
+      const alt = c.lastMessage.key.participantAlt || '';
+      if (alt && alt.includes('@s.whatsapp.net')) phone = alt.split('@')[0];
+    }
 
     chatMap[jid] = {
       id: jid,
-      isGroup: isGroupJid(jid),
+      isGroup: isGroup,
       subject: gm?.subject || resolvedName || '',
       pushName: resolvedName || '',
       phone: phone,
@@ -238,7 +247,7 @@ async function selectGroup(chat, el) {
   cancelReply();
   closeMentionDropdown();
 
-  const isGroup = isGroupJid(chat.id);
+  const isGroup = chat.isGroup !== undefined ? chat.isGroup : isGroupJid(chat.id);
 
   document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
   if (el) el.classList.add('active');
@@ -1151,7 +1160,7 @@ async function fetchAndRenderMessages() {
 
       const participantJid = key.participant || key.remoteJid;
       const currentSenderKey = isOut ? '__me__' : (participantJid || '');
-      const isPrivateChat = isPrivateJid(selectedGroup);
+      const isPrivateChat = selectedGroupData && !selectedGroupData.isGroup;
       // In private chats, don't show sender name (it's always the same person)
       const sender = (!isOut && !isPrivateChat) ? (m.pushName || resolveContactName(participantJid)) : '';
 
