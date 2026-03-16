@@ -324,9 +324,10 @@ async function selectGroup(chat, el) {
 
   const isGroup = chat.isGroup !== undefined ? chat.isGroup : isGroupJid(chat.id);
 
-  // Mark as read
-  if (chat.unreadCount > 0) {
-    chat.unreadCount = 0;
+  // Mark as read — find in allChats to ensure we modify the actual reference
+  const chatRef = allChats.find(c => c.id === chat.id) || chat;
+  if (chatRef.unreadCount > 0) {
+    chatRef.unreadCount = 0;
     renderGroupList();
     api('POST', '/chat/markChatUnread/' + currentInstance, { chat: chat.id, unread: false }).catch(() => {});
   }
@@ -2204,26 +2205,38 @@ function startSSE() {
     try {
       const payload = JSON.parse(e.data);
       const event = payload.event || '';
+      console.log('[SSE]', event);
 
       // Handle incoming messages
       if (event === 'messages.upsert') {
         const d = payload.data || payload;
         const key = d.key || {};
         if (key.fromMe) return;
-        const remoteJid = key.remoteJid;
-        if (!remoteJid || remoteJid === selectedGroup) return;
 
-        // Find or create chat entry
+        // Resolve the real remoteJid (may come as LID, try alternatives)
+        let remoteJid = key.remoteJid || '';
+        const remoteJidAlt = key.remoteJidAlt || '';
+
+        // Skip if it's the currently open chat
+        if (remoteJid === selectedGroup || remoteJidAlt === selectedGroup) return;
+
+        // Try to find the chat by remoteJid, remoteJidAlt, or phone number
         let chat = allChats.find(c => c.id === remoteJid);
+        if (!chat && remoteJidAlt) {
+          chat = allChats.find(c => c.id === remoteJidAlt);
+          if (chat) remoteJid = remoteJidAlt; // use the alt JID
+        }
+
         if (!chat) {
-          // New chat from unknown contact — add to list
-          const isGroup = isGroupJid(remoteJid);
+          // New chat — use the best JID available (prefer @s.whatsapp.net over @lid)
+          const bestJid = (remoteJidAlt && isPrivateJid(remoteJidAlt)) ? remoteJidAlt : remoteJid;
+          const isGroup = isGroupJid(bestJid);
           chat = {
-            id: remoteJid,
+            id: bestJid,
             isGroup: isGroup,
             subject: d.pushName || '',
             pushName: d.pushName || '',
-            phone: isPrivateJid(remoteJid) ? remoteJid.split('@')[0] : '',
+            phone: isPrivateJid(bestJid) ? bestJid.split('@')[0] : '',
             size: 0,
             profilePicUrl: null,
             lastMessageTs: 0,
@@ -2231,19 +2244,19 @@ function startSSE() {
           };
           allChats.push(chat);
           if (isGroup) groups.push(chat);
+          remoteJid = bestJid;
         }
 
         chat.unreadCount = (chat.unreadCount || 0) + 1;
         const ts = d.messageTimestamp;
         if (ts) {
           const numTs = typeof ts === 'string' ? parseInt(ts) : ts;
-          if (numTs > (groupLastMsg[remoteJid] || 0)) {
-            groupLastMsg[remoteJid] = numTs;
+          if (numTs > (groupLastMsg[chat.id] || 0)) {
+            groupLastMsg[chat.id] = numTs;
             saveGroupTimestamps();
           }
         }
-        // Save contact name from incoming message
-        if (d.pushName && !key.fromMe) contactNames[remoteJid] = d.pushName;
+        if (d.pushName) contactNames[chat.id] = d.pushName;
         renderGroupList();
       }
 
@@ -2261,7 +2274,7 @@ function startSSE() {
           attemptAutoRestart(instName);
         }
       }
-    } catch {}
+    } catch (err) { console.error('[SSE webhook error]', err); }
   });
 
   // Keep named listeners as fallback
