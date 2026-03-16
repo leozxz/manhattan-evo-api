@@ -2246,18 +2246,28 @@ function startSSE() {
         let remoteJid = key.remoteJid || '';
         const remoteJidAlt = key.remoteJidAlt || '';
 
-        // Skip if it's the currently open chat
-        if (remoteJid === selectedGroup || remoteJidAlt === selectedGroup) return;
+        // Extract phone numbers from JIDs for matching
+        const phoneFromJid = isPrivateJid(remoteJid) ? remoteJid.split('@')[0] : '';
+        const phoneFromAlt = remoteJidAlt && isPrivateJid(remoteJidAlt) ? remoteJidAlt.split('@')[0] : '';
 
-        // Try to find the chat by remoteJid, remoteJidAlt, or phone number
+        // Skip if it's the currently open chat (match by JID or phone)
+        const selectedPhone = selectedGroupData?.phone || (selectedGroup ? selectedGroup.split('@')[0] : '');
+        if (remoteJid === selectedGroup || remoteJidAlt === selectedGroup) return;
+        if (selectedPhone && (phoneFromJid === selectedPhone || phoneFromAlt === selectedPhone)) return;
+
+        // Try to find the chat by exact JID, alt JID, or phone number
         let chat = allChats.find(c => c.id === remoteJid);
         if (!chat && remoteJidAlt) {
           chat = allChats.find(c => c.id === remoteJidAlt);
-          if (chat) remoteJid = remoteJidAlt; // use the alt JID
+        }
+        // Match by phone number (handles LID ↔ s.whatsapp.net mismatch)
+        if (!chat && (phoneFromJid || phoneFromAlt)) {
+          const phone = phoneFromJid || phoneFromAlt;
+          chat = allChats.find(c => c.phone === phone);
         }
 
         if (!chat) {
-          // New chat — use the best JID available (prefer @s.whatsapp.net over @lid)
+          // Truly new chat — use the best JID available (prefer @s.whatsapp.net over @lid)
           const bestJid = (remoteJidAlt && isPrivateJid(remoteJidAlt)) ? remoteJidAlt : remoteJid;
           const isGroup = isGroupJid(bestJid);
           chat = {
@@ -2273,7 +2283,6 @@ function startSSE() {
           };
           allChats.push(chat);
           if (isGroup) groups.push(chat);
-          remoteJid = bestJid;
         }
 
         chat.unreadCount = (chat.unreadCount || 0) + 1;
