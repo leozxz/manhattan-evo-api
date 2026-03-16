@@ -2143,7 +2143,7 @@ async function init() {
       // Configure webhook
       if (webhookUrl) {
         api('POST', '/webhook/set/' + inst.name, {
-          webhook: { enabled: true, url: webhookUrl, byEvents: false, events: ['CONNECTION_UPDATE', 'GROUP_PARTICIPANTS_UPDATE'] }
+          webhook: { enabled: true, url: webhookUrl, byEvents: false, events: [] }
         }).catch(() => {});
       }
     }
