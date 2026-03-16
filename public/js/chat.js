@@ -72,13 +72,15 @@ async function loadGroups() {
     }
 
     // For private chats, resolve phone number for display
-    // LID JIDs don't have phone numbers, try to get from lastMessage key
+    // LID JIDs don't have phone numbers, try to get from lastMessage key alternatives
     let phone = '';
     if (isPrivateJid(jid)) {
       phone = jid.split('@')[0];
     } else if (isLid && c.lastMessage?.key) {
-      // Try participantAlt or other fields that might have the real phone
-      const alt = c.lastMessage.key.participantAlt || '';
+      // Try remoteJidAlt, participantAlt, or other fields with real phone
+      const remoteAlt = c.lastMessage.key.remoteJidAlt || '';
+      const partAlt = c.lastMessage.key.participantAlt || '';
+      const alt = remoteAlt || partAlt;
       if (alt && alt.includes('@s.whatsapp.net')) phone = alt.split('@')[0];
     }
 
@@ -126,6 +128,41 @@ async function loadGroups() {
   try { localStorage.setItem(cacheKey, JSON.stringify(allChats)); } catch {}
   saveGroupTimestamps();
   renderGroupList();
+
+  // Resolve LID JIDs to real phone numbers in background
+  await resolveLidPhones();
+}
+
+async function resolveLidPhones() {
+  if (!currentInstance) return;
+  // Find chats with LID JIDs or missing phone numbers
+  const lids = allChats.filter(c => !c.isGroup && !c.phone);
+  if (lids.length === 0) return;
+
+  const numbers = lids.map(c => c.id);
+  try {
+    const res = await api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers });
+    if (!res.ok || !Array.isArray(res.data)) return;
+
+    let changed = false;
+    res.data.forEach(r => {
+      // r has: jid, exists, number, lid
+      if (!r.number) return;
+      const phone = String(r.number).replace(/\D/g, '');
+      if (!phone) return;
+      // Find the chat by matching the jid or original number
+      const chat = allChats.find(c => c.id === r.jid || c.id === r.number + '@s.whatsapp.net' || c.id === r.number + '@lid');
+      if (chat && !chat.phone) {
+        chat.phone = phone;
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      renderGroupList();
+      try { localStorage.setItem('chats_' + currentInstance, JSON.stringify(allChats)); } catch {}
+    }
+  } catch {}
 }
 
 function saveGroupTimestamps() {
