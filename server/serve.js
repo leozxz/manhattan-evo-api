@@ -219,6 +219,23 @@ http.createServer((req, res) => {
     return handleLogin(req, res);
   }
 
+  // Internal webhook receiver — no auth required (Evolution API calls this)
+  if (req.method === 'POST' && urlPath === '/webhook/internal') {
+    let body = '';
+    req.on('data', c => { if (body.length < 65536) body += c; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        const event = data.event || 'unknown';
+        console.log('[webhook]', event, JSON.stringify(data).substring(0, 800));
+        broadcastSSE(event, data);
+      } catch (e) { console.log('[webhook] parse error:', e.message); }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('{"ok":true}');
+    });
+    return;
+  }
+
   // Auth check (skip if PANEL_PASS not set)
   const authResult = checkAuth(req, res);
   if (!authResult) return;
@@ -241,23 +258,6 @@ http.createServer((req, res) => {
   if (req.method === 'GET' && urlPath === '/config') {
     res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
     res.end(JSON.stringify({ webhookUrl: WEBHOOK_URL }));
-    return;
-  }
-
-  // Internal webhook receiver — Evolution API sends events here
-  if (req.method === 'POST' && urlPath === '/webhook/internal') {
-    let body = '';
-    req.on('data', c => { if (body.length < 65536) body += c; });
-    req.on('end', () => {
-      try {
-        const data = JSON.parse(body);
-        const event = data.event || 'unknown';
-        console.log('[webhook]', event, JSON.stringify(data).substring(0, 800));
-        broadcastSSE(event, data);
-      } catch (e) { console.log('[webhook] parse error:', e.message); }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end('{"ok":true}');
-    });
     return;
   }
 
