@@ -3,6 +3,8 @@
 // =====================
 let groupLastMsg = {}; // chatId -> timestamp of last message
 try { groupLastMsg = JSON.parse(localStorage.getItem('groupLastMsg') || '{}'); } catch {}
+let chatLastRead = {}; // chatId -> timestamp of last read message (for local unread tracking)
+try { chatLastRead = JSON.parse(localStorage.getItem('chatLastRead') || '{}'); } catch {}
 let showPanel = false;
 let chatFilter = 'all'; // 'all', 'groups', 'private'
 let allChats = []; // unified list: groups + individual chats
@@ -328,9 +330,11 @@ async function selectGroup(chat, el) {
   if (chat.unreadCount > 0) {
     chat.unreadCount = 0;
     renderGroupList();
-    // Tell Evolution API to mark as read
     api('POST', '/chat/markChatUnread/' + currentInstance, { chat: chat.id, unread: false }).catch(() => {});
   }
+  // Save last read timestamp for local unread tracking (private chats)
+  chatLastRead[chat.id] = Math.floor(Date.now() / 1000);
+  try { localStorage.setItem('chatLastRead', JSON.stringify(chatLastRead)); } catch {}
 
   document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
   if (el) el.classList.add('active');
@@ -1517,17 +1521,14 @@ async function pollUnreadCounts() {
     const res = await api('POST', '/chat/findChats/' + currentInstance, {});
     if (!res.ok || !Array.isArray(res.data)) return;
     let changed = false;
+    const privatesToCheck = [];
+
     res.data.forEach(c => {
       const jid = c.remoteJid;
-      if (!jid) return;
+      if (!jid || jid === selectedGroup) return;
       const chat = allChats.find(ch => ch.id === jid);
       if (!chat) return;
-      const newUnread = c.unreadCount || 0;
-      // Only update if different (and not the currently open chat)
-      if (jid !== selectedGroup && newUnread !== chat.unreadCount) {
-        chat.unreadCount = newUnread;
-        changed = true;
-      }
+
       // Update timestamp from lastMessage
       const ts = c.lastMessage?.messageTimestamp;
       if (ts) {
@@ -1537,7 +1538,53 @@ async function pollUnreadCounts() {
           changed = true;
         }
       }
+
+      // For groups, API returns real unreadCount
+      if (c.unreadCount != null) {
+        const newUnread = c.unreadCount || 0;
+        if (newUnread !== chat.unreadCount) {
+          chat.unreadCount = newUnread;
+          changed = true;
+        }
+      } else if (!chat.isGroup && c.lastMessage && !c.lastMessage.key?.fromMe) {
+        // For private chats with null unreadCount, check if last message is newer than last read
+        const lastRead = chatLastRead[jid] || 0;
+        const msgTs = typeof ts === 'string' ? parseInt(ts) : (ts || 0);
+        if (msgTs > lastRead) {
+          // Count unread via findMessages
+          privatesToCheck.push(jid);
+        } else if (chat.unreadCount > 0) {
+          chat.unreadCount = 0;
+          changed = true;
+        }
+      }
     });
+
+    // For private chats, count messages newer than last read
+    if (privatesToCheck.length > 0) {
+      const results = await Promise.all(privatesToCheck.map(jid =>
+        api('POST', '/chat/findMessages/' + currentInstance, {
+          where: { key: { remoteJid: jid } }, offset: 50, page: 1
+        }).then(r => ({ jid, data: r.ok ? r.data : null })).catch(() => ({ jid, data: null }))
+      ));
+      results.forEach(({ jid, data }) => {
+        const chat = allChats.find(ch => ch.id === jid);
+        if (!chat || !data) return;
+        const msgs = extractMessages(data);
+        const lastRead = chatLastRead[jid] || 0;
+        let count = 0;
+        msgs.forEach(m => {
+          if (m.key?.fromMe) return;
+          const ts = typeof m.messageTimestamp === 'string' ? parseInt(m.messageTimestamp) : (m.messageTimestamp || 0);
+          if (ts > lastRead) count++;
+        });
+        if (count !== chat.unreadCount) {
+          chat.unreadCount = count;
+          changed = true;
+        }
+      });
+    }
+
     if (changed) {
       saveGroupTimestamps();
       renderGroupList();
