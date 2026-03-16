@@ -326,10 +326,9 @@ async function selectGroup(chat, el) {
 
   // Mark as read — find in allChats to ensure we modify the actual reference
   const chatRef = allChats.find(c => c.id === chat.id) || chat;
-  if (chatRef.unreadCount > 0) {
-    chatRef.unreadCount = 0;
-    renderGroupList();
-  }
+  chatRef.unreadCount = 0;
+  chatRef._lastSeenTs = Math.floor(Date.now() / 1000);
+  renderGroupList();
 
   document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
   if (el) el.classList.add('active');
@@ -1526,10 +1525,23 @@ async function pollChatList() {
 
       // Update unread count (skip currently open chat)
       if (jid !== selectedGroup) {
-        const apiUnread = c.unreadCount;
-        if (apiUnread != null && apiUnread !== chat.unreadCount) {
-          chat.unreadCount = apiUnread;
-          changed = true;
+        if (c.unreadCount != null) {
+          // Groups: API has real count
+          if (c.unreadCount !== chat.unreadCount) {
+            chat.unreadCount = c.unreadCount;
+            changed = true;
+          }
+        } else if (!chat.isGroup) {
+          // Private chats: API returns null, check if last message is incoming and newer
+          const lastMsg = c.lastMessage;
+          if (lastMsg && !lastMsg.key?.fromMe) {
+            const msgTs = typeof lastMsg.messageTimestamp === 'string' ? parseInt(lastMsg.messageTimestamp) : (lastMsg.messageTimestamp || 0);
+            const lastSeen = chat._lastSeenTs || 0;
+            if (msgTs > lastSeen && chat.unreadCount === 0) {
+              chat.unreadCount = 1; // At least 1 unread
+              changed = true;
+            }
+          }
         }
       }
 
