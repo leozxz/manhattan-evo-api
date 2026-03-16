@@ -26,9 +26,11 @@ const WEBHOOK_URL = process.env.WEBHOOK_URL || ('http://localhost:' + PORT + '/w
 const sseClients = new Set();
 
 function broadcastSSE(event, data) {
-  const msg = 'event: ' + event + '\ndata: ' + JSON.stringify(data) + '\n\n';
+  // Send named event + generic 'webhook' event so frontend can catch both
+  const named = 'event: ' + event + '\ndata: ' + JSON.stringify(data) + '\n\n';
+  const generic = 'event: webhook\ndata: ' + JSON.stringify(data) + '\n\n';
   for (const client of sseClients) {
-    try { client.write(msg); } catch { sseClients.delete(client); }
+    try { client.write(named); client.write(generic); } catch { sseClients.delete(client); }
   }
 }
 
