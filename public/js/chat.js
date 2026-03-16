@@ -1494,12 +1494,8 @@ function highlightMentions(escapedHtml) {
   });
 }
 
-let chatListPollInterval = null;
-
 function startMsgPolling() {
   stopMsgPolling();
-  // Always poll chat list for unread counts + reordering
-  chatListPollInterval = setInterval(pollChatList, 5000);
   if (!selectedGroup) return;
   document.getElementById('pollingIndicator')?.style.setProperty('display', 'flex');
   msgPollInterval = setInterval(fetchAndRenderMessages, 3000);
@@ -1507,72 +1503,8 @@ function startMsgPolling() {
 
 function stopMsgPolling() {
   if (msgPollInterval) { clearInterval(msgPollInterval); msgPollInterval = null; }
-  if (chatListPollInterval) { clearInterval(chatListPollInterval); chatListPollInterval = null; }
   lastMsgCount = 0;
   document.getElementById('pollingIndicator')?.style.setProperty('display', 'none');
-}
-
-async function pollChatList() {
-  if (!currentInstance) return;
-  try {
-    const res = await api('POST', '/chat/findChats/' + currentInstance, {});
-    if (!res.ok || !Array.isArray(res.data)) return;
-    let changed = false;
-
-    res.data.forEach(c => {
-      const jid = c.remoteJid;
-      if (!jid || jid === 'status@broadcast' || jid === '0@s.whatsapp.net') return;
-
-      const chat = allChats.find(ch => ch.id === jid);
-      if (!chat) return;
-
-      // Update unread count (skip currently open chat)
-      if (jid !== selectedGroup) {
-        const lastMsg = c.lastMessage;
-        const msgTs = lastMsg?.messageTimestamp ? (typeof lastMsg.messageTimestamp === 'string' ? parseInt(lastMsg.messageTimestamp) : lastMsg.messageTimestamp) : 0;
-        const lastSeen = chatLastSeen[jid] || 0;
-
-        // If user has seen this chat after the last message, it's read
-        if (lastSeen >= msgTs) {
-          if (chat.unreadCount > 0) {
-            chat.unreadCount = 0;
-            changed = true;
-          }
-        } else if (lastMsg && !lastMsg.key?.fromMe) {
-          // There's a newer incoming message the user hasn't seen
-          const newUnread = (c.unreadCount != null && c.unreadCount > 0) ? c.unreadCount : 1;
-          if (newUnread !== chat.unreadCount) {
-            chat.unreadCount = newUnread;
-            changed = true;
-          }
-        } else if (chat.unreadCount > 0) {
-          // Last message is fromMe — clear unread
-          chat.unreadCount = 0;
-          changed = true;
-        }
-      }
-
-      // Update timestamp from lastMessage
-      const ts = c.lastMessage?.messageTimestamp;
-      if (ts) {
-        const numTs = typeof ts === 'string' ? parseInt(ts) : ts;
-        if (numTs > (groupLastMsg[jid] || 0)) {
-          groupLastMsg[jid] = numTs;
-          changed = true;
-        }
-      }
-
-      // Update contact name
-      if (c.lastMessage?.pushName && !c.lastMessage.key?.fromMe) {
-        contactNames[jid] = c.lastMessage.pushName;
-      }
-    });
-
-    if (changed) {
-      saveGroupTimestamps();
-      renderGroupList();
-    }
-  } catch {}
 }
 
 // CHAT SEARCH
@@ -2152,6 +2084,41 @@ document.addEventListener('click', (e) => {
 });
 
 // =====================
+// WEBHOOK CONFIG
+// =====================
+let _webhookUrl = null;
+
+async function resolveWebhookUrl() {
+  const cfgRes = await api('GET', '/config');
+  _webhookUrl = cfgRes.ok ? cfgRes.data?.webhookUrl : null;
+  // If server returns localhost but we're on a public domain, use the public URL
+  if (_webhookUrl && _webhookUrl.includes('localhost') && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    _webhookUrl = location.origin + '/webhook/internal';
+  }
+  console.log('[Webhook URL]', _webhookUrl);
+}
+
+function configureWebhook(instName) {
+  if (!_webhookUrl) return;
+  console.log('[Webhook] configuring for', instName, '->', _webhookUrl);
+  api('POST', '/webhook/set/' + instName, {
+    webhook: {
+      enabled: true,
+      url: _webhookUrl,
+      byEvents: false,
+      events: [
+        'MESSAGES_UPSERT',
+        'MESSAGES_UPDATE',
+        'CONNECTION_UPDATE',
+        'GROUP_PARTICIPANTS_UPDATE',
+        'CHATS_UPDATE',
+        'CHATS_UPSERT'
+      ]
+    }
+  }).catch(() => {});
+}
+
+// =====================
 // INIT
 // =====================
 async function init() {
@@ -2203,22 +2170,11 @@ async function init() {
     instances = merged;
 
     // Enable alwaysOnline and configure webhooks for connected instances
-    const cfgRes = await api('GET', '/config');
-    let webhookUrl = cfgRes.ok ? cfgRes.data?.webhookUrl : null;
-    // If server returns localhost but we're on a public domain, use the public URL
-    if (webhookUrl && webhookUrl.includes('localhost') && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-      webhookUrl = location.origin + '/webhook/internal';
-    }
+    await resolveWebhookUrl();
     for (const inst of instances) {
       if (inst.state !== 'open') continue;
-      // Set alwaysOnline
       api('PUT', '/instance/update/' + inst.name, { alwaysOnline: true }).catch(() => {});
-      // Configure webhook
-      if (webhookUrl) {
-        api('POST', '/webhook/set/' + inst.name, {
-          webhook: { enabled: true, url: webhookUrl, byEvents: false, events: [] }
-        }).catch(() => {});
-      }
+      configureWebhook(inst.name);
     }
   }
 
@@ -2343,6 +2299,8 @@ function startSSE() {
         if (state === 'open' && inst.state !== 'open') {
           updateCardStatus(instName, 'open');
           toast('"' + instName + '" conectado!');
+          // Reconfigure webhook on connect to ensure it's set correctly
+          configureWebhook(instName);
         } else if (state === 'close' && inst.state === 'open') {
           attemptAutoRestart(instName);
         }
