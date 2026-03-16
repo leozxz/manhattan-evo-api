@@ -329,7 +329,6 @@ async function selectGroup(chat, el) {
   if (chatRef.unreadCount > 0) {
     chatRef.unreadCount = 0;
     renderGroupList();
-    api('POST', '/chat/markChatUnread/' + currentInstance, { chat: chat.id, unread: false }).catch(() => {});
   }
 
   document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
@@ -2135,7 +2134,11 @@ async function init() {
 
     // Enable alwaysOnline and configure webhooks for connected instances
     const cfgRes = await api('GET', '/config');
-    const webhookUrl = cfgRes.ok ? cfgRes.data?.webhookUrl : null;
+    let webhookUrl = cfgRes.ok ? cfgRes.data?.webhookUrl : null;
+    // If server returns localhost but we're on a public domain, use the public URL
+    if (webhookUrl && webhookUrl.includes('localhost') && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      webhookUrl = location.origin + '/webhook/internal';
+    }
     for (const inst of instances) {
       if (inst.state !== 'open') continue;
       // Set alwaysOnline
