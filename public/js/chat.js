@@ -308,14 +308,14 @@ function renderGroupList() {
         <div class="chat-name">${escapeHtml(displayName)}</div>
         <div class="chat-preview">${escapeHtml(subtitle)}</div>
       </div>
-      <div class="chat-item-right">
-        ${timeStr ? '<span class="chat-time">' + timeStr + '</span>' : ''}
-        <div class="chat-item-bottom">
-          ${unreadBadge}
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <div style="display:flex;align-items:center;gap:2px">
+          ${timeStr ? '<span class="chat-time" style="font-size:11px;color:#667781">' + timeStr + '</span>' : ''}
           <button class="chat-item-menu-btn" onclick="event.stopPropagation();toggleChatMenu('${chatId}',this)" title="Opcoes">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="#667781"><path d="M7 10l5 5 5-5z"/></svg>
           </button>
         </div>
+        ${unreadBadge}
       </div>
     `;
     list.appendChild(item);
