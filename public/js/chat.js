@@ -214,10 +214,10 @@ function renderGroupList() {
     } else {
       avatarSvg = '<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
       const phone = c.phone || c.id.split('@')[0];
-      const formattedPhone = formatPhone(phone);
+      const formattedPhone = /^\d{10,15}$/.test(phone) ? formatPhone(phone) : phone;
       const contactName = c.pushName || contactNames[c.id] || '';
-      displayName = contactName || formattedPhone;
-      subtitle = contactName ? formattedPhone : '';
+      displayName = formattedPhone;
+      subtitle = contactName || '';
     }
 
     const unreadBadge = c.unreadCount > 0 ? '<span class="chat-unread-badge">' + c.unreadCount + '</span>' : '';
@@ -264,9 +264,8 @@ async function selectGroup(chat, el) {
     avatarSvg = '<svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3z"/></svg>';
   } else {
     const phone = chat.phone || chat.id.split('@')[0];
-    const formattedPhone = formatPhone(phone);
-    const contactName = chat.pushName || contactNames[chat.id] || '';
-    displayName = contactName || formattedPhone;
+    const formattedPhone = /^\d{10,15}$/.test(phone) ? formatPhone(phone) : phone;
+    displayName = formattedPhone;
     avatarSvg = '<svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
   }
 
@@ -1076,6 +1075,8 @@ async function fetchAndRenderMessages() {
     // Build reaction map and contact names from all messages (before filtering)
     const reactionMap = buildReactionMap(sorted);
     sorted.forEach(m => {
+      // Don't save "Você" as the contact's name (fromMe messages have our own pushName)
+      if (m.key?.fromMe) return;
       const participant = m.key?.participant || m.key?.remoteJid;
       if (participant && m.pushName) contactNames[participant] = m.pushName;
     });
