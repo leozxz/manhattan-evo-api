@@ -129,8 +129,9 @@ async function loadGroups() {
   saveGroupTimestamps();
   renderGroupList();
 
-  // Resolve LID JIDs to real phone numbers in background
-  await resolveLidPhones();
+  // Resolve LID JIDs to real phone numbers and fetch missing profile pics in background
+  resolveLidPhones();
+  fetchMissingProfilePics();
 }
 
 async function resolveLidPhones() {
@@ -163,6 +164,34 @@ async function resolveLidPhones() {
       try { localStorage.setItem('chats_' + currentInstance, JSON.stringify(allChats)); } catch {}
     }
   } catch {}
+}
+
+async function fetchMissingProfilePics() {
+  if (!currentInstance) return;
+  const missing = allChats.filter(c => !c.profilePicUrl);
+  if (missing.length === 0) return;
+
+  let changed = false;
+  // Fetch in batches of 3 to avoid overloading
+  const batchSize = 3;
+  for (let i = 0; i < missing.length; i += batchSize) {
+    const batch = missing.slice(i, i + batchSize);
+    const results = await Promise.all(batch.map(c =>
+      api('POST', '/chat/fetchProfilePictureUrl/' + currentInstance, { number: c.id })
+        .then(res => ({ id: c.id, url: res.ok && res.data?.profilePictureUrl ? res.data.profilePictureUrl : null }))
+        .catch(() => ({ id: c.id, url: null }))
+    ));
+    results.forEach(r => {
+      if (r.url) {
+        const chat = allChats.find(c => c.id === r.id);
+        if (chat) { chat.profilePicUrl = r.url; changed = true; }
+      }
+    });
+  }
+  if (changed) {
+    renderGroupList();
+    try { localStorage.setItem('chats_' + currentInstance, JSON.stringify(allChats)); } catch {}
+  }
 }
 
 function saveGroupTimestamps() {
@@ -243,13 +272,14 @@ function renderGroupList() {
     const timeStr = lastTs ? new Date(lastTs < 1e12 ? lastTs * 1000 : lastTs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
 
     // Different avatar and info for groups vs individual
-    let avatarSvg, displayName, subtitle;
+    let avatarHtml, displayName, subtitle;
+    const groupSvg = '<svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>';
+    const personSvg = '<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+
     if (c.isGroup) {
-      avatarSvg = '<svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>';
       displayName = c.subject || c.id;
       subtitle = (c.size || '?') + ' participantes';
     } else {
-      avatarSvg = '<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
       const phone = c.phone || c.id.split('@')[0];
       const formattedPhone = /^\d{10,15}$/.test(phone) ? formatPhone(phone) : phone;
       const contactName = c.pushName || contactNames[c.id] || '';
@@ -257,11 +287,18 @@ function renderGroupList() {
       subtitle = contactName || '';
     }
 
+    if (c.profilePicUrl) {
+      avatarHtml = '<img src="' + escapeHtml(c.profilePicUrl) + '" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+        '<span class="chat-avatar-fallback" style="display:none">' + (c.isGroup ? groupSvg : personSvg) + '</span>';
+    } else {
+      avatarHtml = c.isGroup ? groupSvg : personSvg;
+    }
+
     const unreadBadge = c.unreadCount > 0 ? '<span class="chat-unread-badge">' + c.unreadCount + '</span>' : '';
 
     item.innerHTML = `
       <div class="chat-avatar${c.isGroup ? '' : ' chat-avatar-private'}">
-        ${avatarSvg}
+        ${avatarHtml}
       </div>
       <div class="chat-info">
         <div class="chat-name">${escapeHtml(displayName)}</div>
@@ -295,15 +332,21 @@ async function selectGroup(chat, el) {
 
   // Resolve display name for individual chats
   let displayName;
-  let avatarSvg;
+  let avatarHtml;
+  const headerGroupSvg = '<svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3z"/></svg>';
+  const headerPersonSvg = '<svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
   if (isGroup) {
     displayName = chat.subject || chat.id;
-    avatarSvg = '<svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3z"/></svg>';
   } else {
     const phone = chat.phone || chat.id.split('@')[0];
     const formattedPhone = /^\d{10,15}$/.test(phone) ? formatPhone(phone) : phone;
     displayName = formattedPhone;
-    avatarSvg = '<svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+  }
+  if (chat.profilePicUrl) {
+    avatarHtml = '<img src="' + escapeHtml(chat.profilePicUrl) + '" class="chat-avatar-img" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+      '<span class="chat-avatar-fallback" style="display:none">' + (isGroup ? headerGroupSvg : headerPersonSvg) + '</span>';
+  } else {
+    avatarHtml = isGroup ? headerGroupSvg : headerPersonSvg;
   }
 
   const panelBtn = isGroup ? `
@@ -320,7 +363,7 @@ async function selectGroup(chat, el) {
             <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
           </button>
           <div class="chat-avatar${isGroup ? '' : ' chat-avatar-private'}" style="width:36px;height:36px">
-            ${avatarSvg}
+            ${avatarHtml}
           </div>
           <div class="chat-name" style="cursor:pointer" ${isGroup ? 'onclick="togglePanel()"' : ''}>${escapeHtml(displayName)}</div>
           <div class="header-spacer"></div>
