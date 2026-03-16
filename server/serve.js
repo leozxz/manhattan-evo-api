@@ -22,6 +22,122 @@ const PANEL_PASS = process.env.PANEL_PASS || '';
 const DIR = path.join(__dirname, '..', 'public');
 const WEBHOOK_URL = process.env.WEBHOOK_URL || ('http://localhost:' + PORT + '/webhook/internal');
 
+// =====================
+// METRICS TRACKING
+// =====================
+const METRICS_DIR = path.join(ROOT, '.metrics');
+if (!fs.existsSync(METRICS_DIR)) fs.mkdirSync(METRICS_DIR, { recursive: true });
+
+function metricsPath(instance) {
+  const safe = String(instance).replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(METRICS_DIR, safe + '.json');
+}
+
+function loadMetrics(instance) {
+  try {
+    return JSON.parse(fs.readFileSync(metricsPath(instance), 'utf8'));
+  } catch {
+    return { events: [], groupsCreated: [], disconnections: [] };
+  }
+}
+
+function saveMetrics(instance, metrics) {
+  fs.writeFileSync(metricsPath(instance), JSON.stringify(metrics));
+}
+
+function trackEvent(instance, type, extra) {
+  if (!instance) return;
+  const metrics = loadMetrics(instance);
+  const now = Date.now();
+
+  metrics.events.push({ type, ts: now, ...extra });
+
+  // Keep only last 7 days of events
+  const sevenDaysAgo = now - 7 * 86400000;
+  metrics.events = metrics.events.filter(e => e.ts > sevenDaysAgo);
+  metrics.groupsCreated = (metrics.groupsCreated || []).filter(ts => ts > sevenDaysAgo);
+  metrics.disconnections = (metrics.disconnections || []).filter(ts => ts > sevenDaysAgo);
+
+  saveMetrics(instance, metrics);
+}
+
+function trackDisconnection(instance) {
+  if (!instance) return;
+  const metrics = loadMetrics(instance);
+  metrics.disconnections = metrics.disconnections || [];
+  metrics.disconnections.push(Date.now());
+  saveMetrics(instance, metrics);
+}
+
+function trackGroupCreated(instance) {
+  if (!instance) return;
+  const metrics = loadMetrics(instance);
+  metrics.groupsCreated = metrics.groupsCreated || [];
+  metrics.groupsCreated.push(Date.now());
+  saveMetrics(instance, metrics);
+}
+
+function computeMetrics(instance) {
+  const metrics = loadMetrics(instance);
+  const now = Date.now();
+  const hourAgo = now - 3600000;
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const todayTs = todayStart.getTime();
+  const weekAgo = now - 7 * 86400000;
+  const monthAgo = now - 30 * 86400000;
+
+  const sentEvents = metrics.events.filter(e => e.type === 'sent');
+  const receivedEvents = metrics.events.filter(e => e.type === 'received');
+  const groupSentEvents = metrics.events.filter(e => e.type === 'sent' && e.isGroup);
+  const privateSentEvents = metrics.events.filter(e => e.type === 'sent' && !e.isGroup);
+
+  const sentLastHour = sentEvents.filter(e => e.ts > hourAgo).length;
+  const sentToday = sentEvents.filter(e => e.ts > todayTs).length;
+  const sentWeek = sentEvents.filter(e => e.ts > weekAgo).length;
+  const receivedToday = receivedEvents.filter(e => e.ts > todayTs).length;
+  const receivedWeek = receivedEvents.filter(e => e.ts > weekAgo).length;
+
+  const gc = metrics.groupsCreated || [];
+  const gcToday = gc.filter(ts => ts > todayTs).length;
+  const gcWeek = gc.filter(ts => ts > weekAgo).length;
+  const gcMonth = gc.filter(ts => ts > monthAgo).length;
+
+  // Hourly activity for today
+  const hourlyActivity = new Array(24).fill(0);
+  sentEvents.filter(e => e.ts > todayTs).forEach(e => {
+    const h = new Date(e.ts).getHours();
+    hourlyActivity[h]++;
+  });
+
+  // Unique contacts in the last 7 days
+  const contacts = new Set();
+  metrics.events.filter(e => e.ts > weekAgo && e.contact).forEach(e => contacts.add(e.contact));
+
+  // Response rate
+  const totalSentWeek = sentEvents.filter(e => e.ts > weekAgo).length;
+  const totalReceivedWeek = receivedEvents.filter(e => e.ts > weekAgo).length;
+  const responseRate = totalSentWeek > 0 ? Math.round((totalReceivedWeek / totalSentWeek) * 100) : 0;
+
+  // Uptime (simple: based on disconnections in last 7 days)
+  const disconnections = (metrics.disconnections || []).filter(ts => ts > weekAgo).length;
+  // Rough estimate: each disconnection ~30min downtime
+  const estimatedDowntime = disconnections * 30 * 60000;
+  const uptime = Math.max(0, Math.round(((weekAgo > 0 ? 7 * 86400000 : now) - estimatedDowntime) / (7 * 86400000) * 100));
+
+  return {
+    sent: { lastHour: sentLastHour, today: sentToday, week: sentWeek },
+    received: { today: receivedToday, week: receivedWeek },
+    groupsCreated: { today: gcToday, week: gcWeek, month: gcMonth, total: gc.length },
+    groupMsgsSent: groupSentEvents.filter(e => e.ts > weekAgo).length,
+    privateMsgsSent: privateSentEvents.filter(e => e.ts > weekAgo).length,
+    hourlyActivity,
+    disconnections,
+    uptime: Math.min(100, uptime),
+    responseRate: Math.min(100, responseRate),
+    uniqueContacts: contacts.size,
+  };
+}
+
 // SSE (Server-Sent Events) client management
 const sseClients = new Set();
 
@@ -250,9 +366,69 @@ http.createServer((req, res) => {
       try {
         const data = JSON.parse(body);
         const event = data.event || 'unknown';
+        const webhookInstance = data.instance || '';
         console.log('[webhook]', event, JSON.stringify(data).substring(0, 800));
+
+        // Track metrics from webhook events
+        if (webhookInstance) {
+          if (event === 'messages.upsert') {
+            const msgData = data.data || {};
+            const key = msgData.key || {};
+            const isFromMe = key.fromMe === true;
+            const remoteJid = key.remoteJid || '';
+            const isGroup = remoteJid.endsWith('@g.us');
+            const contact = remoteJid.split('@')[0];
+            if (isFromMe) {
+              trackEvent(webhookInstance, 'sent', { isGroup, contact });
+            } else {
+              trackEvent(webhookInstance, 'received', { isGroup, contact });
+            }
+          }
+          if (event === 'group.create' || event === 'groups.upsert') {
+            trackGroupCreated(webhookInstance);
+          }
+          if (event === 'connection.update') {
+            const state = (data.data || {}).state;
+            if (state === 'close' || state === 'refused') {
+              trackDisconnection(webhookInstance);
+            }
+          }
+        }
+
         broadcastSSE(event, data);
       } catch (e) { console.log('[webhook] parse error:', e.message); }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('{"ok":true}');
+    });
+    return;
+  }
+
+  // Dashboard metrics endpoint
+  if (req.method === 'GET' && urlPath.startsWith('/api/metrics/')) {
+    const instance = decodeURIComponent(urlPath.split('/api/metrics/')[1]);
+    if (!instance) {
+      res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end('{"error":"instance required"}');
+      return;
+    }
+    const data = computeMetrics(instance);
+    res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+    res.end(JSON.stringify(data));
+    return;
+  }
+
+  // Manual event tracking from frontend (group creation, message sent, etc.)
+  if (req.method === 'POST' && urlPath === '/api/track') {
+    let body = '';
+    req.on('data', c => { if (body.length < 8192) body += c; });
+    req.on('end', () => {
+      try {
+        const { instance, type, isGroup, contact } = JSON.parse(body);
+        if (instance && type) {
+          if (type === 'group_created') trackGroupCreated(instance);
+          else trackEvent(instance, type, { isGroup: !!isGroup, contact: contact || '' });
+        }
+      } catch {}
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end('{"ok":true}');
     });

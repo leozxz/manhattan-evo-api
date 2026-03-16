@@ -6,6 +6,9 @@
 *.env
 .env.*
 
+# Metrics data
+.metrics/
+
 # Evolution API (cloned repo & zip)
 evolution-api/
 evolution-api.zip

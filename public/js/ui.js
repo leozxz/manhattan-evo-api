@@ -80,16 +80,18 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  const idx = ['connect','group','chat'].indexOf(name);
+  const idx = ['connect','group','chat','dashboard'].indexOf(name);
   document.querySelectorAll('.sidebar-btn')[idx].classList.add('active');
 
-  const titles = { connect: 'Conexoes', group: 'Criar Grupo', chat: 'Mensagens' };
+  const titles = { connect: 'Conexoes', group: 'Criar Grupo', chat: 'Mensagens', dashboard: 'Dashboard' };
   document.getElementById('pageTitle').textContent = titles[name];
 
   if (name === 'connect') renderInstances();
   if (name === 'group') updateGroupInstanceSelect();
   if (name === 'chat') { loadContacts(); loadGroups(); startMsgPolling(); }
   else stopMsgPolling();
+  if (name === 'dashboard') startDashboard();
+  else stopDashboard();
 }
 
 // Format phone number for display: +55 11 99999-9999
