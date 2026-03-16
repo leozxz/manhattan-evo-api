@@ -205,6 +205,13 @@ http.createServer((req, res) => {
   }
   const fullApiPath = queryString ? urlPath + '?' + queryString : urlPath;
 
+  // Health check endpoint (no auth required)
+  if (req.method === 'GET' && urlPath === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end('{"status":"ok"}');
+    return;
+  }
+
   // Handle login POST
   if (req.method === 'POST' && urlPath === '/auth/login') {
     return handleLogin(req, res);
