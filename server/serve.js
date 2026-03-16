@@ -33,7 +33,7 @@ function broadcastSSE(event, data) {
 }
 
 // Whitelist of public directories/files (only these are served statically)
-const PUBLIC_WHITELIST = new Set(['index.html', 'css', 'js', 'audios']);
+const PUBLIC_WHITELIST = new Set(['index.html', 'favicon.png', 'css', 'js', 'audios']);
 const ALLOWED_EXTENSIONS = new Set(['.html', '.js', '.css', '.mp3', '.ogg', '.wav', '.png', '.jpg', '.gif', '.svg', '.json']);
 
 const MIME = {
