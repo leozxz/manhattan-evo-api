@@ -299,6 +299,7 @@ function renderGroupList() {
 
     const unreadBadge = c.unreadCount > 0 ? '<span class="chat-unread-badge">' + c.unreadCount + '</span>' : '';
 
+    const chatId = escapeHtml(c.id);
     item.innerHTML = `
       <div class="chat-avatar${c.isGroup ? '' : ' chat-avatar-private'}">
         ${avatarHtml}
@@ -307,13 +308,108 @@ function renderGroupList() {
         <div class="chat-name">${escapeHtml(displayName)}</div>
         <div class="chat-preview">${escapeHtml(subtitle)}</div>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        ${timeStr ? '<span class="chat-time" style="font-size:11px;color:#667781">' + timeStr + '</span>' : ''}
-        ${unreadBadge}
+      <div class="chat-item-right">
+        ${timeStr ? '<span class="chat-time">' + timeStr + '</span>' : ''}
+        <div class="chat-item-bottom">
+          ${unreadBadge}
+          <button class="chat-item-menu-btn" onclick="event.stopPropagation();toggleChatMenu('${chatId}',this)" title="Opcoes">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#667781"><path d="M7 10l5 5 5-5z"/></svg>
+          </button>
+        </div>
       </div>
     `;
     list.appendChild(item);
   });
+}
+
+// =====================
+// CHAT ITEM MENU
+// =====================
+let activeChatMenu = null;
+
+function toggleChatMenu(chatId, btn) {
+  closeChatMenu();
+  const chat = allChats.find(c => c.id === chatId);
+  if (!chat) return;
+
+  const menu = document.createElement('div');
+  menu.className = 'chat-item-menu';
+  menu.id = 'chatItemMenu';
+
+  const unreadLabel = chat.unreadCount > 0 ? 'Marcar como lida' : 'Marcar como nao lida';
+  menu.innerHTML = `
+    <button onclick="event.stopPropagation();markChatUnread('${escapeHtml(chatId)}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+      ${unreadLabel}
+    </button>
+    <button class="chat-menu-danger" onclick="event.stopPropagation();deleteChat('${escapeHtml(chatId)}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+      Deletar conversa
+    </button>
+  `;
+
+  // Position menu below the button
+  const rect = btn.getBoundingClientRect();
+  menu.style.top = rect.bottom + 'px';
+  menu.style.right = (window.innerWidth - rect.right) + 'px';
+  document.body.appendChild(menu);
+  activeChatMenu = menu;
+
+  // Close on click outside
+  setTimeout(() => document.addEventListener('click', closeChatMenu, { once: true }), 0);
+}
+
+function closeChatMenu() {
+  if (activeChatMenu) { activeChatMenu.remove(); activeChatMenu = null; }
+}
+
+function markChatUnread(chatId) {
+  closeChatMenu();
+  const chat = allChats.find(c => c.id === chatId);
+  if (!chat) return;
+
+  if (chat.unreadCount > 0) {
+    // Mark as read
+    chat.unreadCount = 0;
+    chatLastSeen[chatId] = Math.floor(Date.now() / 1000);
+    try { localStorage.setItem('chatLastSeen', JSON.stringify(chatLastSeen)); } catch {}
+  } else {
+    // Mark as unread
+    chat.unreadCount = 1;
+    delete chatLastSeen[chatId];
+    try { localStorage.setItem('chatLastSeen', JSON.stringify(chatLastSeen)); } catch {}
+  }
+  renderGroupList();
+}
+
+function deleteChat(chatId) {
+  closeChatMenu();
+  if (!confirm('Deletar esta conversa do painel?')) return;
+
+  // Remove from allChats
+  const idx = allChats.findIndex(c => c.id === chatId);
+  if (idx >= 0) allChats.splice(idx, 1);
+  const gIdx = groups.findIndex(c => c.id === chatId);
+  if (gIdx >= 0) groups.splice(gIdx, 1);
+
+  // Clear related data
+  delete groupLastMsg[chatId];
+  delete chatLastSeen[chatId];
+  saveGroupTimestamps();
+  try { localStorage.setItem('chatLastSeen', JSON.stringify(chatLastSeen)); } catch {}
+  try { localStorage.setItem('chats_' + currentInstance, JSON.stringify(allChats)); } catch {}
+
+  // If this chat was open, close it
+  if (selectedGroup === chatId) {
+    selectedGroup = null;
+    selectedGroupData = null;
+    stopMsgPolling();
+    const area = document.getElementById('chatArea');
+    if (area) area.innerHTML = '<div class="empty-chat"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg>Selecione uma conversa para ver as mensagens</div>';
+  }
+
+  renderGroupList();
+  toast('Conversa removida do painel');
 }
 
 async function selectGroup(chat, el) {
