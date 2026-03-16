@@ -1528,32 +1528,27 @@ async function pollChatList() {
 
       // Update unread count (skip currently open chat)
       if (jid !== selectedGroup) {
-        if (c.unreadCount != null) {
-          // Groups: API has real count
-          if (c.unreadCount !== chat.unreadCount) {
-            chat.unreadCount = c.unreadCount;
-            changed = true;
-          }
-        } else if (!chat.isGroup) {
-          // Private chats: API returns null, check if last message is incoming and newer than last seen
-          const lastMsg = c.lastMessage;
-          if (lastMsg && !lastMsg.key?.fromMe) {
-            const msgTs = typeof lastMsg.messageTimestamp === 'string' ? parseInt(lastMsg.messageTimestamp) : (lastMsg.messageTimestamp || 0);
-            const lastSeen = chatLastSeen[jid] || 0;
-            if (msgTs > lastSeen) {
-              if (chat.unreadCount === 0) {
-                chat.unreadCount = 1;
-                changed = true;
-              }
-            } else if (chat.unreadCount > 0) {
-              chat.unreadCount = 0;
-              changed = true;
-            }
-          } else if (chat.unreadCount > 0) {
-            // Last message is fromMe or no message — clear unread
+        const lastMsg = c.lastMessage;
+        const msgTs = lastMsg?.messageTimestamp ? (typeof lastMsg.messageTimestamp === 'string' ? parseInt(lastMsg.messageTimestamp) : lastMsg.messageTimestamp) : 0;
+        const lastSeen = chatLastSeen[jid] || 0;
+
+        // If user has seen this chat after the last message, it's read
+        if (lastSeen >= msgTs) {
+          if (chat.unreadCount > 0) {
             chat.unreadCount = 0;
             changed = true;
           }
+        } else if (lastMsg && !lastMsg.key?.fromMe) {
+          // There's a newer incoming message the user hasn't seen
+          const newUnread = (c.unreadCount != null && c.unreadCount > 0) ? c.unreadCount : 1;
+          if (newUnread !== chat.unreadCount) {
+            chat.unreadCount = newUnread;
+            changed = true;
+          }
+        } else if (chat.unreadCount > 0) {
+          // Last message is fromMe — clear unread
+          chat.unreadCount = 0;
+          changed = true;
         }
       }
 
