@@ -20,7 +20,7 @@ const EVO_API_KEY = process.env.EVO_API_KEY || '';
 const PANEL_USER = process.env.PANEL_USER || 'admin';
 const PANEL_PASS = process.env.PANEL_PASS || '';
 const DIR = path.join(__dirname, '..', 'public');
-const WEBHOOK_URL = 'http://localhost:' + PORT + '/webhook/internal';
+const WEBHOOK_URL = process.env.WEBHOOK_URL || ('http://localhost:' + PORT + '/webhook/internal');
 
 // SSE (Server-Sent Events) client management
 const sseClients = new Set();
