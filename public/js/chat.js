@@ -5,8 +5,17 @@ let groupLastMsg = {}; // chatId -> timestamp of last message
 try { groupLastMsg = JSON.parse(localStorage.getItem('groupLastMsg') || '{}'); } catch {}
 let chatLastSeen = {}; // chatId -> timestamp when user last opened the chat
 try { chatLastSeen = JSON.parse(localStorage.getItem('chatLastSeen') || '{}'); } catch {}
-let deletedChats = {}; // chatId -> true (persisted, survives reload)
-try { deletedChats = JSON.parse(localStorage.getItem('deletedChats') || '{}'); } catch {}
+let deletedChats = {}; // chatId -> timestamp (persisted, auto-expires after 7 days)
+try {
+  const raw = JSON.parse(localStorage.getItem('deletedChats') || '{}');
+  const now = Date.now();
+  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+  for (const k in raw) {
+    if (typeof raw[k] === 'number' && now - raw[k] < SEVEN_DAYS) deletedChats[k] = raw[k];
+    // Skip old boolean entries or expired ones
+  }
+  localStorage.setItem('deletedChats', JSON.stringify(deletedChats));
+} catch {}
 // phoneIndex: phone (last 8 digits) -> chatId (for dedup)
 let phoneIndex = {};
 let showPanel = false;
@@ -1815,12 +1824,8 @@ function highlightMentions(escapedHtml) {
   });
 }
 
-let chatListFallbackInterval = null;
-
 function startMsgPolling() {
   stopMsgPolling();
-  // Light fallback poll: refresh chat list every 15s (catches anything SSE missed)
-  chatListFallbackInterval = setInterval(refreshChatList, 15000);
   if (!selectedGroup) return;
   document.getElementById('pollingIndicator')?.style.setProperty('display', 'flex');
   msgPollInterval = setInterval(fetchAndRenderMessages, 3000);
@@ -1828,67 +1833,8 @@ function startMsgPolling() {
 
 function stopMsgPolling() {
   if (msgPollInterval) { clearInterval(msgPollInterval); msgPollInterval = null; }
-  if (chatListFallbackInterval) { clearInterval(chatListFallbackInterval); chatListFallbackInterval = null; }
   lastMsgCount = 0;
   document.getElementById('pollingIndicator')?.style.setProperty('display', 'none');
-}
-
-async function refreshChatList() {
-  if (!currentInstance) return;
-  try {
-    const res = await api('POST', '/chat/findChats/' + currentInstance, {});
-    if (!res.ok || !Array.isArray(res.data)) return;
-    let changed = false;
-    res.data.forEach(c => {
-      const jid = c.remoteJid;
-      if (!jid || jid === 'status@broadcast' || jid === '0@s.whatsapp.net') return;
-      if (isDeletedChat(jid)) return;
-
-      let chat = allChats.find(ch => ch.id === jid);
-      // Try phone match for existing chats
-      if (!chat) {
-        const cPhone = jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0] : '';
-        if (cPhone) chat = findChatByPhone(cPhone);
-      }
-
-      const ts = c.lastMessage?.messageTimestamp;
-      const numTs = ts ? (typeof ts === 'string' ? parseInt(ts) : ts) : 0;
-
-      if (!chat && numTs > 0) {
-        // New chat discovered — add it
-        const isGroup = isGroupJid(jid);
-        const phone = isPrivateJid(jid) ? jid.split('@')[0] : '';
-        let pushName = c.pushName || '';
-        if (!pushName && c.lastMessage?.pushName && !c.lastMessage.key?.fromMe) pushName = c.lastMessage.pushName;
-        chat = {
-          id: jid, isGroup, subject: pushName, pushName, phone,
-          size: 0, profilePicUrl: c.profilePicUrl || null,
-          lastMessageTs: numTs, unreadCount: 0
-        };
-        // Check unread
-        const lastSeen = chatLastSeen[jid] || 0;
-        if (numTs > lastSeen && c.lastMessage && !c.lastMessage.key?.fromMe) chat.unreadCount = 1;
-        allChats.push(chat);
-        if (isGroup) groups.push(chat);
-        rebuildPhoneIndex();
-        changed = true;
-      } else if (chat) {
-        // Update timestamp
-        if (numTs > (groupLastMsg[chat.id] || 0)) {
-          groupLastMsg[chat.id] = numTs;
-          changed = true;
-        }
-        // Update unread for chats not currently open
-        if (chat.id !== selectedGroup) {
-          const lastSeen = chatLastSeen[chat.id] || 0;
-          if (numTs > lastSeen && c.lastMessage && !c.lastMessage.key?.fromMe) {
-            if (chat.unreadCount === 0) { chat.unreadCount = 1; changed = true; }
-          }
-        }
-      }
-    });
-    if (changed) { saveGroupTimestamps(); renderGroupList(); }
-  } catch {}
 }
 
 // CHAT SEARCH
@@ -2624,7 +2570,6 @@ function startSSE() {
       if (event === 'messages.upsert') {
         const d = payload.data || payload;
         const key = d.key || {};
-        console.log('[SSE msg]', { remoteJid: key.remoteJid, remoteJidAlt: key.remoteJidAlt, fromMe: key.fromMe, pushName: d.pushName, phone: selectedGroupData?.phone });
         if (key.fromMe) return;
 
         // Resolve the real remoteJid (may come as LID, try alternatives)
