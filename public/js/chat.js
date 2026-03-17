@@ -2564,6 +2564,14 @@ function startSSE() {
 
         const incomingPhone = phoneFromJid || phoneFromAlt;
 
+        // DEBUG: log what arrived and what we have
+        console.log('[SSE MATCH]', {
+          remoteJid,
+          remoteJidAlt,
+          incomingPhone,
+          chats: allChats.filter(c => !c.isGroup).map(c => ({ id: c.id, messageJid: c.messageJid, phone: c.phone }))
+        });
+
         // Skip deleted chats
         if (isDeletedChat(remoteJid)) return;
 
