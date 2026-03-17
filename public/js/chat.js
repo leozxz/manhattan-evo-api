@@ -25,17 +25,30 @@ let allChats = []; // unified list: groups + individual chats
 function isGroupJid(jid) { return jid && jid.endsWith('@g.us'); }
 function isPrivateJid(jid) { return jid && jid.endsWith('@s.whatsapp.net'); }
 // Get the best number for sending messages (async — resolves LIDs)
+// Check if a string looks like a real phone number (not a LID ID)
+function isRealPhone(num) {
+  if (!num || num.length > 15) return false;
+  // Real phones: country code (1-3 digits) + number. Max 15 digits total.
+  // LID IDs: typically 15+ digits, don't start with valid country codes
+  // Simple check: must be 10-13 digits (covers most countries including BR)
+  return /^\d{10,13}$/.test(num);
+}
+
 async function getSendNumber() {
   if (!selectedGroup) return '';
-  // For groups, use group JID directly
   if (isGroupJid(selectedGroup)) return selectedGroup;
-  // For individual chats, prefer real phone number (not LID IDs)
+
+  // Check all possible sources for a real phone number
   const phone = selectedGroupData?.phone || '';
-  if (phone && phone.length <= 15 && /^[1-9]\d{9,14}$/.test(phone)) return phone;
-  // Extract phone from any @s.whatsapp.net JID
+  if (isRealPhone(phone)) return phone;
+
   const mJid = selectedGroupData?.messageJid || selectedGroup;
   if (isPrivateJid(mJid)) return mJid.split('@')[0];
-  // LID: try to resolve real phone via whatsappNumbers
+
+  const chatId = selectedGroup;
+  if (isPrivateJid(chatId)) return chatId.split('@')[0];
+
+  // LID: try to resolve via whatsappNumbers
   try {
     const res = await api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers: [mJid] });
     if (res.ok && Array.isArray(res.data)) {
@@ -47,7 +60,8 @@ async function getSendNumber() {
       }
     }
   } catch {}
-  // Last resort: send the full LID JID (Evolution API can handle it)
+
+  // Last resort: send the full LID JID
   return mJid;
 }
 
@@ -242,10 +256,10 @@ async function resolveLidPhones() {
     let changed = false;
     res.data.forEach(r => {
       // r has: jid, exists, number, lid
-      if (!r.number) return;
-      const phone = String(r.number).replace(/\D/g, '');
-      if (!phone) return;
-      // Find the chat by matching the jid or original number
+      // Only use if jid is a real phone JID (not LID)
+      if (!r.jid || !isPrivateJid(r.jid)) return;
+      const phone = r.jid.split('@')[0];
+      if (!isRealPhone(phone)) return;
       const chat = allChats.find(c => c.id === r.jid || c.id === r.number + '@s.whatsapp.net' || c.id === r.number + '@lid');
       if (chat && !chat.phone) {
         chat.phone = phone;
@@ -2628,7 +2642,7 @@ function startSSE() {
           // Pick best JID: prefer @s.whatsapp.net
           const phoneJid = allJids.find(j => isPrivateJid(j));
           const bestJid = phoneJid || remoteJid;
-          const chatPhone = allPhones[0] || '';
+          const chatPhone = allPhones.find(p => isRealPhone(p)) || '';
           const isGrp = isGroupJid(bestJid);
           chat = {
             id: bestJid,
@@ -2646,9 +2660,9 @@ function startSSE() {
           // Resolve phone in background if missing
           if (!chatPhone && !isGrp && currentInstance) {
             api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers: [remoteJid] }).then(r => {
-              if (r.ok && Array.isArray(r.data) && r.data[0]?.number) {
-                chat.phone = String(r.data[0].number).replace(/\D/g, '');
-                chat.messageJid = r.data[0].jid || chat.messageJid;
+              if (r.ok && Array.isArray(r.data) && r.data[0]?.jid && isPrivateJid(r.data[0].jid)) {
+                chat.phone = r.data[0].jid.split('@')[0];
+                chat.messageJid = r.data[0].jid;
                 rebuildPhoneIndex();
                 renderGroupList();
               }
