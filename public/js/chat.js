@@ -1409,35 +1409,35 @@ function previewImage(src) {
 async function fetchAndRenderMessages() {
   if (!selectedGroup || !currentInstance) return;
 
-  // Build set of JIDs to query (received msgs may use different JID than sent msgs)
+  // Determine which JIDs to query for messages
   const messageJid = selectedGroupData?.messageJid || selectedGroup;
   const phone = selectedGroupData?.phone || '';
-  const phoneJid = phone ? phone + '@s.whatsapp.net' : '';
-  const jids = [messageJid];
-  if (phoneJid && phoneJid !== messageJid) jids.push(phoneJid);
 
-  // Fetch messages from all JID variants and merge
-  const allResults = await Promise.all(jids.map(jid =>
-    api('POST', '/chat/findMessages/' + currentInstance, {
+  // Build list of JIDs to try (first match wins)
+  const jidsToTry = [messageJid];
+  if (phone) {
+    const pJid = phone + '@s.whatsapp.net';
+    if (pJid !== messageJid) jidsToTry.push(pJid);
+    // BR 9-digit variants
+    if (phone.startsWith('55') && phone.length === 13)
+      jidsToTry.push(phone.slice(0, 4) + phone.slice(5) + '@s.whatsapp.net');
+    else if (phone.startsWith('55') && phone.length === 12)
+      jidsToTry.push(phone.slice(0, 4) + '9' + phone.slice(4) + '@s.whatsapp.net');
+  }
+
+  // Query each JID, use the one that returns most messages
+  let bestRes = null;
+  let bestCount = 0;
+  for (const jid of jidsToTry) {
+    const r = await api('POST', '/chat/findMessages/' + currentInstance, {
       where: { key: { remoteJid: jid } }, offset: 100, page: 1
-    })
-  ));
-
-  // Merge and deduplicate by message ID
-  const seenIds = new Set();
-  let mergedMsgs = [];
-  let totalFromApi = 0;
-  allResults.forEach(r => {
-    const msgs = extractMessages(r.ok ? r.data : null);
-    totalFromApi += r.ok && r.data?.messages?.total ? r.data.messages.total : msgs.length;
-    msgs.forEach(m => {
-      const mid = m.key?.id || m.id;
-      if (mid && !seenIds.has(mid)) { seenIds.add(mid); mergedMsgs.push(m); }
     });
-  });
+    const count = extractMessages(r.ok ? r.data : null).length;
+    if (count > bestCount) { bestRes = r; bestCount = count; }
+    if (count > 0) break; // Found messages, use this JID
+  }
 
-  // Build a fake response for the rendering code below
-  const res = { ok: true, data: { messages: { total: totalFromApi, records: mergedMsgs } } };
+  const res = bestRes || { ok: true, data: { messages: { total: 0, records: [] } } };
 
   const container = document.getElementById('msgContainer');
   if (!container) return;
@@ -1806,8 +1806,12 @@ function highlightMentions(escapedHtml) {
   });
 }
 
+let chatListPollInterval = null;
+
 function startMsgPolling() {
   stopMsgPolling();
+  // Always poll chat list every 5s for unread badges + reordering
+  chatListPollInterval = setInterval(pollChatList, 5000);
   if (!selectedGroup) return;
   document.getElementById('pollingIndicator')?.style.setProperty('display', 'flex');
   msgPollInterval = setInterval(fetchAndRenderMessages, 3000);
@@ -1815,8 +1819,77 @@ function startMsgPolling() {
 
 function stopMsgPolling() {
   if (msgPollInterval) { clearInterval(msgPollInterval); msgPollInterval = null; }
+  if (chatListPollInterval) { clearInterval(chatListPollInterval); chatListPollInterval = null; }
   lastMsgCount = 0;
   document.getElementById('pollingIndicator')?.style.setProperty('display', 'none');
+}
+
+async function pollChatList() {
+  if (!currentInstance) return;
+  try {
+    const res = await api('POST', '/chat/findChats/' + currentInstance, {});
+    if (!res.ok || !Array.isArray(res.data)) return;
+    let changed = false;
+
+    res.data.forEach(c => {
+      const jid = c.remoteJid;
+      if (!jid || jid === 'status@broadcast' || jid === '0@s.whatsapp.net') return;
+      if (isDeletedChat(jid)) return;
+
+      // Find existing chat by JID or phone
+      let chat = allChats.find(ch => ch.id === jid || ch.messageJid === jid);
+      if (!chat) {
+        const cPhone = isPrivateJid(jid) ? jid.split('@')[0] : '';
+        if (cPhone) chat = findChatByPhone(cPhone);
+      }
+
+      const ts = c.lastMessage?.messageTimestamp;
+      const numTs = ts ? (typeof ts === 'string' ? parseInt(ts) : ts) : 0;
+
+      if (!chat && numTs > 0) {
+        // New chat discovered
+        const isGrp = isGroupJid(jid);
+        const phone = isPrivateJid(jid) ? jid.split('@')[0] : '';
+        let name = c.pushName || '';
+        if (!name && c.lastMessage?.pushName && !c.lastMessage.key?.fromMe) name = c.lastMessage.pushName;
+        chat = {
+          id: jid, messageJid: jid, isGroup: isGrp,
+          subject: name, pushName: name, phone: phone,
+          size: 0, profilePicUrl: c.profilePicUrl || null,
+          lastMessageTs: numTs, unreadCount: 0
+        };
+        const lastSeen = chatLastSeen[jid] || 0;
+        if (numTs > lastSeen && c.lastMessage && !c.lastMessage.key?.fromMe) chat.unreadCount = 1;
+        allChats.push(chat);
+        if (isGrp) groups.push(chat);
+        rebuildPhoneIndex();
+        changed = true;
+      } else if (chat) {
+        // Update timestamp
+        if (numTs > (groupLastMsg[chat.id] || 0)) {
+          groupLastMsg[chat.id] = numTs;
+          changed = true;
+        }
+        // Update unread (skip open chat)
+        if (chat.id !== selectedGroup && chat.messageJid !== selectedGroup) {
+          const lastSeen = chatLastSeen[chat.id] || 0;
+          if (c.unreadCount != null && c.unreadCount > 0 && numTs > lastSeen) {
+            if (c.unreadCount !== chat.unreadCount) { chat.unreadCount = c.unreadCount; changed = true; }
+          } else if (numTs > lastSeen && c.lastMessage && !c.lastMessage.key?.fromMe) {
+            if (chat.unreadCount === 0) { chat.unreadCount = 1; changed = true; }
+          } else if (lastSeen >= numTs && chat.unreadCount > 0) {
+            chat.unreadCount = 0; changed = true;
+          }
+        }
+        // Update messageJid if we have a better one
+        if (!chat.messageJid || chat.messageJid.endsWith('@lid')) {
+          chat.messageJid = jid;
+        }
+      }
+    });
+
+    if (changed) { saveGroupTimestamps(); renderGroupList(); }
+  } catch {}
 }
 
 // CHAT SEARCH
