@@ -240,9 +240,22 @@ async function fetchGroupTimestamps(groupList) {
   }
 }
 
+function updateSidebarBadge() {
+  const total = allChats.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+  const badge = document.getElementById('sidebarUnreadBadge');
+  if (!badge) return;
+  if (total > 0) {
+    badge.textContent = total > 99 ? '99+' : total;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
 function renderGroupList() {
   const list = document.getElementById('groupList');
   if (!list) return;
+  updateSidebarBadge();
 
   // Filter based on active tab
   let filtered = allChats;
