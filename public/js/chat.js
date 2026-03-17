@@ -5,12 +5,41 @@ let groupLastMsg = {}; // chatId -> timestamp of last message
 try { groupLastMsg = JSON.parse(localStorage.getItem('groupLastMsg') || '{}'); } catch {}
 let chatLastSeen = {}; // chatId -> timestamp when user last opened the chat
 try { chatLastSeen = JSON.parse(localStorage.getItem('chatLastSeen') || '{}'); } catch {}
+let deletedChats = {}; // chatId -> true (persisted, survives reload)
+try { deletedChats = JSON.parse(localStorage.getItem('deletedChats') || '{}'); } catch {}
+// phoneIndex: phone (last 8 digits) -> chatId (for dedup)
+let phoneIndex = {};
 let showPanel = false;
 let chatFilter = 'all'; // 'all', 'groups', 'private'
 let allChats = []; // unified list: groups + individual chats
 
 function isGroupJid(jid) { return jid && jid.endsWith('@g.us'); }
 function isPrivateJid(jid) { return jid && jid.endsWith('@s.whatsapp.net'); }
+
+function phoneKey(phone) { return phone ? phone.slice(-8) : ''; }
+
+function rebuildPhoneIndex() {
+  phoneIndex = {};
+  allChats.forEach(c => { if (c.phone) phoneIndex[phoneKey(c.phone)] = c.id; });
+}
+
+function findChatByPhone(phone) {
+  if (!phone) return null;
+  const key = phoneKey(phone);
+  const id = phoneIndex[key];
+  return id ? allChats.find(c => c.id === id) : null;
+}
+
+function isDeletedChat(jid, phone) {
+  if (deletedChats[jid]) return true;
+  if (phone) {
+    for (const delJid in deletedChats) {
+      const delPhone = delJid.split('@')[0];
+      if (delPhone && phoneKey(delPhone) === phoneKey(phone)) return true;
+    }
+  }
+  return false;
+}
 
 function setChatFilter(filter) {
   chatFilter = filter;
@@ -56,8 +85,9 @@ async function loadGroups() {
   // Process findChats response
   const chatData = chatsRes.ok && Array.isArray(chatsRes.data) ? chatsRes.data : [];
 
-  // Build unified chat list
+  // Build unified chat list (dedup by phone, filter deleted)
   const chatMap = {};
+  const seenPhones = {}; // phoneKey -> jid (dedup private chats)
   chatData.forEach(c => {
     const jid = c.remoteJid;
     if (!jid || jid === 'status@broadcast' || jid === '0@s.whatsapp.net') return;
@@ -74,21 +104,40 @@ async function loadGroups() {
     }
 
     // For private chats, resolve phone number for display
-    // LID JIDs don't have phone numbers, try to get from lastMessage key alternatives
     let phone = '';
     if (isPrivateJid(jid)) {
       phone = jid.split('@')[0];
     } else if (isLid && c.lastMessage?.key) {
-      // Try remoteJidAlt, participantAlt, or other fields with real phone
       const remoteAlt = c.lastMessage.key.remoteJidAlt || '';
       const partAlt = c.lastMessage.key.participantAlt || '';
       const alt = remoteAlt || partAlt;
       if (alt && alt.includes('@s.whatsapp.net')) phone = alt.split('@')[0];
     }
 
-    // Determine unread count: respect chatLastSeen if user already read it
+    // Skip deleted chats
+    if (isDeletedChat(jid, phone)) return;
+
+    // Dedup private chats by phone (avoid LID + s.whatsapp.net duplicates)
+    if (!isGroup && phone) {
+      const pk = phoneKey(phone);
+      if (seenPhones[pk]) {
+        // Keep the one with @s.whatsapp.net, skip the other
+        const existingJid = seenPhones[pk];
+        if (isPrivateJid(jid) && !isPrivateJid(existingJid)) {
+          delete chatMap[existingJid]; // replace LID with phone JID
+        } else {
+          return; // skip this duplicate
+        }
+      }
+      seenPhones[pk] = jid;
+    }
+
+    // Determine unread count: respect chatLastSeen (check all phone variants)
+    const lastSeenByPhone = phone ? (chatLastSeen[jid] || Object.keys(chatLastSeen).reduce((best, k) => {
+      return k.split('@')[0] && phoneKey(k.split('@')[0]) === phoneKey(phone) ? Math.max(best, chatLastSeen[k]) : best;
+    }, 0)) : (chatLastSeen[jid] || 0);
     const msgTs = typeof lastTs === 'string' ? parseInt(lastTs) : lastTs;
-    const lastSeen = chatLastSeen[jid] || 0;
+    const lastSeen = lastSeenByPhone;
     let unread = 0;
     if (lastSeen >= msgTs) {
       unread = 0; // User has seen this chat after the last message
@@ -133,6 +182,7 @@ async function loadGroups() {
 
   allChats = Object.values(chatMap);
   groups = allChats.filter(c => c.isGroup);
+  rebuildPhoneIndex();
 
   if (allChats.length === 0) {
     list.innerHTML = '<div class="no-groups"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg><p>' + (chatsRes.ok ? 'Nenhuma conversa encontrada' : 'Erro ao carregar conversas') + '</p></div>';
@@ -511,11 +561,23 @@ function deleteChat(chatId) {
   closeChatMenu();
   if (!confirm('Deletar esta conversa do painel?')) return;
 
+  // Mark as deleted (persists across reloads and API re-fetches)
+  const chat = allChats.find(c => c.id === chatId);
+  deletedChats[chatId] = true;
+  // Also delete by phone variants to prevent re-appearing with different JID
+  if (chat && chat.phone) {
+    allChats.forEach(c => {
+      if (c.phone && phoneKey(c.phone) === phoneKey(chat.phone)) deletedChats[c.id] = true;
+    });
+  }
+  try { localStorage.setItem('deletedChats', JSON.stringify(deletedChats)); } catch {}
+
   // Remove from allChats
   const idx = allChats.findIndex(c => c.id === chatId);
   if (idx >= 0) allChats.splice(idx, 1);
   const gIdx = groups.findIndex(c => c.id === chatId);
   if (gIdx >= 0) groups.splice(gIdx, 1);
+  rebuildPhoneIndex();
 
   // Clear related data
   delete groupLastMsg[chatId];
@@ -2479,21 +2541,18 @@ function startSSE() {
           if (incomingPhone === selectedPhone || (incomingPhone && incomingPhone.slice(-8) === selectedPhone.slice(-8))) return;
         }
 
+        const incomingPhone = phoneFromJid || phoneFromAlt;
+
+        // Skip deleted chats
+        if (isDeletedChat(remoteJid, incomingPhone)) return;
+
         // Try to find the chat by exact JID, alt JID, or phone number
         let chat = allChats.find(c => c.id === remoteJid);
         if (!chat && remoteJidAlt) {
           chat = allChats.find(c => c.id === remoteJidAlt);
         }
-        // Match by phone number (handles LID ↔ s.whatsapp.net mismatch and BR 9-digit)
-        if (!chat && (phoneFromJid || phoneFromAlt)) {
-          const phone = phoneFromJid || phoneFromAlt;
-          chat = allChats.find(c => {
-            if (!c.phone) return false;
-            if (c.phone === phone) return true;
-            // Normalize: compare last 8 digits (handles BR +55 9-digit variants)
-            const tail = phone.slice(-8);
-            return c.phone.slice(-8) === tail;
-          });
+        if (!chat) {
+          chat = findChatByPhone(incomingPhone);
         }
 
         if (!chat) {
@@ -2513,6 +2572,7 @@ function startSSE() {
           };
           allChats.push(chat);
           if (isGroup) groups.push(chat);
+          rebuildPhoneIndex();
         }
 
         chat.unreadCount = (chat.unreadCount || 0) + 1;
