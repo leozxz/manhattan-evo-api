@@ -1425,19 +1425,21 @@ async function fetchAndRenderMessages() {
       jidsToTry.push(phone.slice(0, 4) + '9' + phone.slice(4) + '@s.whatsapp.net');
   }
 
-  // Query each JID, use the one that returns most messages
-  let bestRes = null;
-  let bestCount = 0;
+  // Query ALL JIDs and merge results (sent msgs may use different JID than received)
+  const dedupIds = new Set();
+  let allMsgs = [];
   for (const jid of jidsToTry) {
     const r = await api('POST', '/chat/findMessages/' + currentInstance, {
       where: { key: { remoteJid: jid } }, offset: 100, page: 1
     });
-    const count = extractMessages(r.ok ? r.data : null).length;
-    if (count > bestCount) { bestRes = r; bestCount = count; }
-    if (count > 0) break; // Found messages, use this JID
+    const msgs = extractMessages(r.ok ? r.data : null);
+    msgs.forEach(m => {
+      const mid = m.key?.id || m.id;
+      if (mid && !dedupIds.has(mid)) { dedupIds.add(mid); allMsgs.push(m); }
+    });
   }
 
-  const res = bestRes || { ok: true, data: { messages: { total: 0, records: [] } } };
+  const res = { ok: true, data: { messages: { total: allMsgs.length, records: allMsgs } } };
 
   const container = document.getElementById('msgContainer');
   if (!container) return;
