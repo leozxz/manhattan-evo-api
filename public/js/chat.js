@@ -1420,8 +1420,10 @@ async function fetchAndRenderMessages() {
 
   // If no messages found and chat has a phone, try with @s.whatsapp.net JID
   let msgs0 = extractMessages(res.ok ? res.data : null);
+  console.log('[Messages]', { selectedGroup, phone: selectedGroupData?.phone, found: msgs0.length });
   if (msgs0.length === 0 && selectedGroupData?.phone) {
     const altJid = selectedGroupData.phone + '@s.whatsapp.net';
+    console.log('[Messages] retrying with', altJid);
     if (altJid !== selectedGroup) {
       res = await api('POST', '/chat/findMessages/' + currentInstance, {
         where: { key: { remoteJid: altJid } },
@@ -2544,6 +2546,7 @@ function startSSE() {
       if (event === 'messages.upsert') {
         const d = payload.data || payload;
         const key = d.key || {};
+        console.log('[SSE msg]', { remoteJid: key.remoteJid, remoteJidAlt: key.remoteJidAlt, fromMe: key.fromMe, pushName: d.pushName, phone: selectedGroupData?.phone });
         if (key.fromMe) return;
 
         // Resolve the real remoteJid (may come as LID, try alternatives)
