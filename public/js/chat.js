@@ -2554,88 +2554,76 @@ function startSSE() {
         const key = d.key || {};
         if (key.fromMe) return;
 
-        // Resolve the real remoteJid (may come as LID, try alternatives)
-        let remoteJid = key.remoteJid || '';
+        // Collect all JIDs and phones from the webhook key
+        const remoteJid = key.remoteJid || '';
         const remoteJidAlt = key.remoteJidAlt || '';
-        // If remoteJid is LID and we have alt, prefer the alt
-        if (remoteJid.endsWith('@lid') && remoteJidAlt && isPrivateJid(remoteJidAlt)) {
-          remoteJid = remoteJidAlt;
+        const allJids = [remoteJid, remoteJidAlt].filter(Boolean);
+        const allPhones = allJids
+          .filter(j => isPrivateJid(j))
+          .map(j => j.split('@')[0])
+          .filter(Boolean);
+        // Also check participant fields
+        if (key.participantAlt && isPrivateJid(key.participantAlt))
+          allPhones.push(key.participantAlt.split('@')[0]);
+
+        // Skip deleted
+        if (allJids.some(j => isDeletedChat(j))) return;
+
+        // Find chat by ANY matching JID or phone
+        let chat = null;
+        for (const j of allJids) {
+          chat = allChats.find(c => c.id === j || c.messageJid === j);
+          if (chat) break;
         }
-
-        // Extract phone numbers from JIDs for matching
-        const phoneFromJid = isPrivateJid(remoteJid) ? remoteJid.split('@')[0] : '';
-        const phoneFromAlt = remoteJidAlt && isPrivateJid(remoteJidAlt) ? remoteJidAlt.split('@')[0] : '';
-        // For LID without alt, try to extract from participant or pushName lookup
-        const participantPhone = key.participant && isPrivateJid(key.participant) ? key.participant.split('@')[0] : '';
-        const participantAltPhone = key.participantAlt && isPrivateJid(key.participantAlt) ? key.participantAlt.split('@')[0] : '';
-
-        const incomingPhone = phoneFromJid || phoneFromAlt || participantAltPhone || participantPhone;
-
-        // Skip deleted chats
-        if (isDeletedChat(remoteJid)) return;
-
-        // Find the chat — try all possible matches
-        let chat = allChats.find(c =>
-          c.id === remoteJid ||
-          c.id === remoteJidAlt ||
-          c.messageJid === remoteJid ||
-          c.messageJid === remoteJidAlt
-        );
-        // Match by phone (last 8 digits)
-        if (!chat && incomingPhone) {
-          chat = findChatByPhone(incomingPhone);
-          // Also try scanning all chats for phone in ID (for LID chats with no phone field)
-          if (!chat) {
-            const pk = phoneKey(incomingPhone);
+        if (!chat) {
+          for (const ph of allPhones) {
+            chat = findChatByPhone(ph);
+            if (chat) break;
+            // Scan all chats by phone in id/messageJid
+            const pk = phoneKey(ph);
             chat = allChats.find(c => {
               if (c.phone && phoneKey(c.phone) === pk) return true;
-              // Check if any JID on the chat contains this phone
-              const idPhone = c.id?.split('@')[0] || '';
-              if (idPhone && phoneKey(idPhone) === pk) return true;
-              const mjPhone = c.messageJid?.split('@')[0] || '';
-              if (mjPhone && phoneKey(mjPhone) === pk) return true;
+              if (c.id && phoneKey(c.id.split('@')[0]) === pk) return true;
+              if (c.messageJid && phoneKey(c.messageJid.split('@')[0]) === pk) return true;
               return false;
             });
+            if (chat) break;
           }
         }
 
         // Skip if it's the currently open chat
         if (chat && (chat.id === selectedGroup || chat.messageJid === selectedGroup)) return;
-        if (!chat) {
-          const selectedPhone = selectedGroupData?.phone || '';
-          if (selectedPhone && incomingPhone && phoneKey(incomingPhone) === phoneKey(selectedPhone)) return;
+        if (!chat && selectedGroupData?.phone) {
+          const selPk = phoneKey(selectedGroupData.phone);
+          if (allPhones.some(ph => phoneKey(ph) === selPk)) return;
         }
 
+        // Create new chat if not found
         if (!chat) {
-          // New chat — prefer @s.whatsapp.net JID, use phone if available
-          const bestJid = isPrivateJid(remoteJid) ? remoteJid : (remoteJidAlt && isPrivateJid(remoteJidAlt) ? remoteJidAlt : remoteJid);
-          const isGroup = isGroupJid(bestJid);
-          let chatPhone = incomingPhone || (isPrivateJid(bestJid) ? bestJid.split('@')[0] : '');
+          // Pick best JID: prefer @s.whatsapp.net
+          const phoneJid = allJids.find(j => isPrivateJid(j));
+          const bestJid = phoneJid || remoteJid;
+          const chatPhone = allPhones[0] || '';
+          const isGrp = isGroupJid(bestJid);
           chat = {
             id: bestJid,
-            messageJid: key.remoteJid || remoteJid, // Original JID from webhook (as stored in DB)
-            isGroup: isGroup,
+            messageJid: remoteJid,
+            isGroup: isGrp,
             subject: d.pushName || '',
             pushName: d.pushName || '',
             phone: chatPhone,
-            size: 0,
-            profilePicUrl: null,
-            lastMessageTs: 0,
-            unreadCount: 0
+            size: 0, profilePicUrl: null, lastMessageTs: 0, unreadCount: 0
           };
           allChats.push(chat);
-          if (isGroup) groups.push(chat);
+          if (isGrp) groups.push(chat);
           rebuildPhoneIndex();
 
-          // Resolve phone in background for chats without phone
-          if (!chatPhone && !isGroup) {
-            api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers: [bestJid] }).then(r => {
+          // Resolve phone in background if missing
+          if (!chatPhone && !isGrp && currentInstance) {
+            api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers: [remoteJid] }).then(r => {
               if (r.ok && Array.isArray(r.data) && r.data[0]?.number) {
                 chat.phone = String(r.data[0].number).replace(/\D/g, '');
-                if (!chat.messageJid || chat.messageJid.endsWith('@lid')) {
-                  const resolved = r.data[0].jid || (chat.phone + '@s.whatsapp.net');
-                  chat.messageJid = resolved;
-                }
+                chat.messageJid = r.data[0].jid || chat.messageJid;
                 rebuildPhoneIndex();
                 renderGroupList();
               }
