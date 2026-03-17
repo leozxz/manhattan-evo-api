@@ -2552,7 +2552,6 @@ function startSSE() {
       if (event === 'messages.upsert') {
         const d = payload.data || payload;
         const key = d.key || {};
-        console.log('[SSE KEY]', JSON.stringify(key));
         if (key.fromMe) return;
 
         // Collect all JIDs and phones from the webhook key
