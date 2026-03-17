@@ -15,6 +15,14 @@ let allChats = []; // unified list: groups + individual chats
 
 function isGroupJid(jid) { return jid && jid.endsWith('@g.us'); }
 function isPrivateJid(jid) { return jid && jid.endsWith('@s.whatsapp.net'); }
+// Get the best JID for sending/fetching (prefer phone@s.whatsapp.net over LID)
+function getSendJid() {
+  if (!selectedGroup) return '';
+  if (isGroupJid(selectedGroup) || isPrivateJid(selectedGroup)) return selectedGroup;
+  // LID or unknown format — use phone if available
+  if (selectedGroupData?.phone) return selectedGroupData.phone + '@s.whatsapp.net';
+  return selectedGroup;
+}
 
 function phoneKey(phone) { return phone ? phone.slice(-8) : ''; }
 
@@ -1404,11 +1412,24 @@ function previewImage(src) {
 async function fetchAndRenderMessages() {
   if (!selectedGroup || !currentInstance) return;
 
-  const res = await api('POST', '/chat/findMessages/' + currentInstance, {
+  let res = await api('POST', '/chat/findMessages/' + currentInstance, {
     where: { key: { remoteJid: selectedGroup } },
     offset: 100,
     page: 1
   });
+
+  // If no messages found and chat has a phone, try with @s.whatsapp.net JID
+  let msgs0 = extractMessages(res.ok ? res.data : null);
+  if (msgs0.length === 0 && selectedGroupData?.phone) {
+    const altJid = selectedGroupData.phone + '@s.whatsapp.net';
+    if (altJid !== selectedGroup) {
+      res = await api('POST', '/chat/findMessages/' + currentInstance, {
+        where: { key: { remoteJid: altJid } },
+        offset: 100,
+        page: 1
+      });
+    }
+  }
 
   const container = document.getElementById('msgContainer');
   if (!container) return;
@@ -1944,7 +1965,7 @@ async function sendMsg() {
 
   // Build body with mentions
   const { mentioned, everyOne } = parseMentions(text);
-  const body = { number: selectedGroup, text };
+  const body = { number: getSendJid(), text };
 
   if (mentioned.length > 0) body.mentioned = mentioned;
   if (everyOne) body.everyOne = true;
@@ -2030,7 +2051,7 @@ function handleMediaFile(input) {
 
     toast('Enviando ' + mediatype + '...');
     const body = {
-      number: selectedGroup,
+      number: getSendJid(),
       mediatype: mediatype,
       media: base64Data,
       mimetype: file.type || undefined,
@@ -2106,7 +2127,7 @@ async function sendLocation() {
 
   toast('Enviando localizacao...');
   const body = {
-    number: selectedGroup,
+    number: getSendJid(),
     name: name || undefined,
     address: addr || undefined,
     latitude: lat,
@@ -2202,7 +2223,7 @@ async function sendQuickAudio(index) {
     });
 
     const sendRes = await api('POST', '/message/sendMedia/' + currentInstance, {
-      number: selectedGroup,
+      number: getSendJid(),
       mediatype: 'audio',
       media: base64,
       mimetype: blob.type || 'audio/mpeg',
@@ -2275,7 +2296,7 @@ async function toggleRecording() {
       });
 
       const sendRes = await api('POST', '/message/sendWhatsAppAudio/' + currentInstance, {
-        number: selectedGroup,
+        number: getSendJid(),
         audio: base64
       });
 
