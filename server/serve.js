@@ -26,13 +26,94 @@ const WEBHOOK_URL = process.env.WEBHOOK_URL || ('http://localhost:' + PORT + '/w
 const sseClients = new Set();
 
 function broadcastSSE(event, data) {
-  // Send named event + generic 'webhook' event so frontend can catch both
   const named = 'event: ' + event + '\ndata: ' + JSON.stringify(data) + '\n\n';
   const generic = 'event: webhook\ndata: ' + JSON.stringify(data) + '\n\n';
   for (const client of sseClients) {
     try { client.write(named); client.write(generic); } catch { sseClients.delete(client); }
   }
 }
+
+// =====================
+// Server-side chat sync — polls Evolution API and pushes updates via SSE
+// =====================
+function evoRequest(method, path, body) {
+  return new Promise((resolve) => {
+    const url = new URL(path, EVO_API_URL);
+    const client = url.protocol === 'https:' ? https : http;
+    const headers = { 'apikey': EVO_API_KEY };
+    if (body) headers['Content-Type'] = 'application/json';
+    const req = client.request({
+      hostname: url.hostname, port: url.port || undefined,
+      path: url.pathname + url.search, method, headers,
+    }, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(null); } });
+    });
+    req.on('error', () => resolve(null));
+    if (body) req.write(JSON.stringify(body));
+    req.end();
+  });
+}
+
+const syncState = {}; // instanceName -> { jid -> { ts, fromMe } }
+
+async function syncChatList() {
+  if (sseClients.size === 0) return;
+
+  // Discover connected instances
+  const instances = await evoRequest('GET', '/instance/fetchInstances');
+  if (!Array.isArray(instances)) return;
+
+  const connectedNames = instances
+    .filter(i => (i.instance?.status || i.connectionStatus) === 'open')
+    .map(i => i.instance?.instanceName || i.name || '')
+    .filter(Boolean);
+
+  for (const instName of connectedNames) {
+    const chats = await evoRequest('POST', '/chat/findChats/' + instName, {});
+    if (!Array.isArray(chats)) continue;
+
+    if (!syncState[instName]) syncState[instName] = {};
+    const known = syncState[instName];
+
+    chats.forEach(chat => {
+      const jid = chat.remoteJid;
+      if (!jid || jid === 'status@broadcast' || jid === '0@s.whatsapp.net') return;
+      const lm = chat.lastMessage;
+      if (!lm) return;
+      const ts = typeof lm.messageTimestamp === 'string' ? parseInt(lm.messageTimestamp) : (lm.messageTimestamp || 0);
+      if (ts <= 0) return;
+      const fromMe = !!lm.key?.fromMe;
+
+      const prev = known[jid];
+      if (!prev || ts > prev.ts) {
+        const isNew = prev && ts > prev.ts && !fromMe;
+        known[jid] = { ts, fromMe };
+
+        if (isNew) {
+          // Broadcast as chat.update so frontend can update list + badges
+          broadcastSSE('chat.update', {
+            event: 'chat.update',
+            instance: instName,
+            data: {
+              remoteJid: jid,
+              pushName: lm.pushName || chat.pushName || '',
+              profilePicUrl: chat.profilePicUrl || null,
+              lastMessage: lm,
+              unreadCount: chat.unreadCount,
+              messageTimestamp: ts,
+              fromMe: fromMe
+            }
+          });
+        }
+      }
+    });
+  }
+}
+
+setInterval(syncChatList, 5000);
+setTimeout(syncChatList, 3000); // First sync after 3s
 
 
 // Whitelist of public directories/files (only these are served statically)

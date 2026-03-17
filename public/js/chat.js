@@ -1806,12 +1806,8 @@ function highlightMentions(escapedHtml) {
   });
 }
 
-let chatListPollInterval = null;
-
 function startMsgPolling() {
   stopMsgPolling();
-  // Always poll chat list every 5s for unread badges + reordering
-  chatListPollInterval = setInterval(pollChatList, 5000);
   if (!selectedGroup) return;
   document.getElementById('pollingIndicator')?.style.setProperty('display', 'flex');
   msgPollInterval = setInterval(fetchAndRenderMessages, 3000);
@@ -1819,78 +1815,10 @@ function startMsgPolling() {
 
 function stopMsgPolling() {
   if (msgPollInterval) { clearInterval(msgPollInterval); msgPollInterval = null; }
-  if (chatListPollInterval) { clearInterval(chatListPollInterval); chatListPollInterval = null; }
   lastMsgCount = 0;
   document.getElementById('pollingIndicator')?.style.setProperty('display', 'none');
 }
 
-async function pollChatList() {
-  if (!currentInstance) return;
-  try {
-    const res = await api('POST', '/chat/findChats/' + currentInstance, {});
-    if (!res.ok || !Array.isArray(res.data)) return;
-    let changed = false;
-
-    res.data.forEach(c => {
-      const jid = c.remoteJid;
-      if (!jid || jid === 'status@broadcast' || jid === '0@s.whatsapp.net') return;
-      if (isDeletedChat(jid)) return;
-
-      // Find existing chat by JID or phone
-      let chat = allChats.find(ch => ch.id === jid || ch.messageJid === jid);
-      if (!chat) {
-        const cPhone = isPrivateJid(jid) ? jid.split('@')[0] : '';
-        if (cPhone) chat = findChatByPhone(cPhone);
-      }
-
-      const ts = c.lastMessage?.messageTimestamp;
-      const numTs = ts ? (typeof ts === 'string' ? parseInt(ts) : ts) : 0;
-
-      if (!chat && numTs > 0) {
-        // New chat discovered
-        const isGrp = isGroupJid(jid);
-        const phone = isPrivateJid(jid) ? jid.split('@')[0] : '';
-        let name = c.pushName || '';
-        if (!name && c.lastMessage?.pushName && !c.lastMessage.key?.fromMe) name = c.lastMessage.pushName;
-        chat = {
-          id: jid, messageJid: jid, isGroup: isGrp,
-          subject: name, pushName: name, phone: phone,
-          size: 0, profilePicUrl: c.profilePicUrl || null,
-          lastMessageTs: numTs, unreadCount: 0
-        };
-        const lastSeen = chatLastSeen[jid] || 0;
-        if (numTs > lastSeen && c.lastMessage && !c.lastMessage.key?.fromMe) chat.unreadCount = 1;
-        allChats.push(chat);
-        if (isGrp) groups.push(chat);
-        rebuildPhoneIndex();
-        changed = true;
-      } else if (chat) {
-        // Update timestamp
-        if (numTs > (groupLastMsg[chat.id] || 0)) {
-          groupLastMsg[chat.id] = numTs;
-          changed = true;
-        }
-        // Update unread (skip open chat)
-        if (chat.id !== selectedGroup && chat.messageJid !== selectedGroup) {
-          const lastSeen = chatLastSeen[chat.id] || 0;
-          if (c.unreadCount != null && c.unreadCount > 0 && numTs > lastSeen) {
-            if (c.unreadCount !== chat.unreadCount) { chat.unreadCount = c.unreadCount; changed = true; }
-          } else if (numTs > lastSeen && c.lastMessage && !c.lastMessage.key?.fromMe) {
-            if (chat.unreadCount === 0) { chat.unreadCount = 1; changed = true; }
-          } else if (lastSeen >= numTs && chat.unreadCount > 0) {
-            chat.unreadCount = 0; changed = true;
-          }
-        }
-        // Update messageJid if we have a better one
-        if (!chat.messageJid || chat.messageJid.endsWith('@lid')) {
-          chat.messageJid = jid;
-        }
-      }
-    });
-
-    if (changed) { saveGroupTimestamps(); renderGroupList(); }
-  } catch {}
-}
 
 // CHAT SEARCH
 let searchTimeout = null;
@@ -2714,6 +2642,61 @@ function startSSE() {
           }
         }
         if (d.pushName) contactNames[chat.id] = d.pushName;
+        renderGroupList();
+      }
+
+      // Handle chat.update from server-side sync (catches messages webhooks miss)
+      if (event === 'chat.update') {
+        const d = payload.data || {};
+        const jid = d.remoteJid;
+        if (!jid || d.fromMe) return;
+        const ts = d.messageTimestamp || 0;
+        const phone = isPrivateJid(jid) ? jid.split('@')[0] : '';
+
+        // Find existing chat
+        let chat = allChats.find(c => c.id === jid || c.messageJid === jid);
+        if (!chat && phone) {
+          chat = findChatByPhone(phone);
+          if (!chat) {
+            const pk = phoneKey(phone);
+            chat = allChats.find(c =>
+              (c.phone && phoneKey(c.phone) === pk) ||
+              (c.id && phoneKey(c.id.split('@')[0]) === pk) ||
+              (c.messageJid && phoneKey(c.messageJid.split('@')[0]) === pk)
+            );
+          }
+        }
+
+        // Skip if currently open
+        if (chat && (chat.id === selectedGroup || chat.messageJid === selectedGroup)) return;
+        if (!chat && selectedGroupData?.phone && phone && phoneKey(phone) === phoneKey(selectedGroupData.phone)) return;
+
+        if (!chat) {
+          // New chat
+          const isGrp = isGroupJid(jid);
+          chat = {
+            id: jid, messageJid: jid, isGroup: isGrp,
+            subject: d.pushName || '', pushName: d.pushName || '', phone: phone,
+            size: 0, profilePicUrl: d.profilePicUrl || null,
+            lastMessageTs: ts, unreadCount: 0
+          };
+          allChats.push(chat);
+          if (isGrp) groups.push(chat);
+          rebuildPhoneIndex();
+        }
+
+        // Update
+        const lastSeen = chatLastSeen[chat.id] || 0;
+        if (ts > lastSeen) {
+          const apiUnread = d.unreadCount;
+          chat.unreadCount = (apiUnread != null && apiUnread > 0) ? apiUnread : Math.max(chat.unreadCount, 1);
+        }
+        if (ts > (groupLastMsg[chat.id] || 0)) {
+          groupLastMsg[chat.id] = ts;
+          saveGroupTimestamps();
+        }
+        if (d.pushName) contactNames[chat.id] = d.pushName;
+        if (!chat.messageJid || chat.messageJid.endsWith('@lid')) chat.messageJid = jid;
         renderGroupList();
       }
 
