@@ -1412,47 +1412,53 @@ function previewImage(src) {
 async function fetchAndRenderMessages() {
   if (!selectedGroup || !currentInstance) return;
 
-  // Build list of JIDs to try (handles LID, phone format variants)
-  const jidsToTry = [selectedGroup];
+  // For private chats, find the ACTUAL remoteJid stored in the database
+  // by checking findChats (which reads directly from Message table)
   const phone = selectedGroupData?.phone || '';
-  if (phone) {
-    const phoneJid = phone + '@s.whatsapp.net';
-    if (!jidsToTry.includes(phoneJid)) jidsToTry.push(phoneJid);
-    // BR 9-digit variant: try with/without leading 9 after area code
-    if (phone.startsWith('55') && phone.length === 13) {
-      // Has 9 digit (5511 9xxxx xxxx) → try without (5511 xxxx xxxx)
-      const without9 = phone.slice(0, 4) + phone.slice(5);
-      jidsToTry.push(without9 + '@s.whatsapp.net');
-    } else if (phone.startsWith('55') && phone.length === 12) {
-      // Missing 9 digit (5511 xxxx xxxx) → try with (5511 9xxxx xxxx)
-      const with9 = phone.slice(0, 4) + '9' + phone.slice(4);
-      jidsToTry.push(with9 + '@s.whatsapp.net');
+  let messageJid = selectedGroup; // default: use the chat's ID
+
+  if (!isGroupJid(selectedGroup)) {
+    // Query findChats to discover what JID the messages are actually stored under
+    const chatsRes = await api('POST', '/chat/findChats/' + currentInstance, {});
+    if (chatsRes.ok && Array.isArray(chatsRes.data)) {
+      const pk = phone ? phoneKey(phone) : '';
+      const match = chatsRes.data.find(c => {
+        if (!c.remoteJid) return false;
+        // Match by exact JID
+        if (c.remoteJid === selectedGroup) return true;
+        // Match by phone (last 8 digits)
+        if (pk) {
+          const cPhone = c.remoteJid.split('@')[0];
+          if (phoneKey(cPhone) === pk) return true;
+        }
+        return false;
+      });
+      if (match) messageJid = match.remoteJid;
     }
   }
 
-  let res = null;
-  for (const jid of jidsToTry) {
-    res = await api('POST', '/chat/findMessages/' + currentInstance, {
-      where: { key: { remoteJid: jid } },
-      offset: 100,
-      page: 1
-    });
-    const msgs = extractMessages(res.ok ? res.data : null);
-    if (msgs.length > 0) break;
-  }
+  let res = await api('POST', '/chat/findMessages/' + currentInstance, {
+    where: { key: { remoteJid: messageJid } },
+    offset: 100,
+    page: 1
+  });
 
-  // Last resort: resolve via whatsappNumbers API
-  if (phone && extractMessages(res?.ok ? res.data : null).length === 0) {
-    const wnRes = await api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers: [phone] });
-    if (wnRes.ok && Array.isArray(wnRes.data)) {
-      const found = wnRes.data.find(n => n.jid);
-      if (found && found.jid && !jidsToTry.includes(found.jid)) {
-        res = await api('POST', '/chat/findMessages/' + currentInstance, {
-          where: { key: { remoteJid: found.jid } },
-          offset: 100,
-          page: 1
-        });
-      }
+  // If still empty and we have a phone, try direct phone JID variants
+  if (extractMessages(res.ok ? res.data : null).length === 0 && phone) {
+    const variants = [phone + '@s.whatsapp.net'];
+    if (phone.startsWith('55') && phone.length === 13) {
+      variants.push(phone.slice(0, 4) + phone.slice(5) + '@s.whatsapp.net');
+    } else if (phone.startsWith('55') && phone.length === 12) {
+      variants.push(phone.slice(0, 4) + '9' + phone.slice(4) + '@s.whatsapp.net');
+    }
+    for (const jid of variants) {
+      if (jid === messageJid) continue;
+      res = await api('POST', '/chat/findMessages/' + currentInstance, {
+        where: { key: { remoteJid: jid } },
+        offset: 100,
+        page: 1
+      });
+      if (extractMessages(res.ok ? res.data : null).length > 0) break;
     }
   }
 
