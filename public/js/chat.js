@@ -1409,14 +1409,35 @@ function previewImage(src) {
 async function fetchAndRenderMessages() {
   if (!selectedGroup || !currentInstance) return;
 
-  // Use messageJid if available (resolved from findChats), fallback to chat ID
-  const jid = selectedGroupData?.messageJid || selectedGroup;
+  // Build set of JIDs to query (received msgs may use different JID than sent msgs)
+  const messageJid = selectedGroupData?.messageJid || selectedGroup;
+  const phone = selectedGroupData?.phone || '';
+  const phoneJid = phone ? phone + '@s.whatsapp.net' : '';
+  const jids = [messageJid];
+  if (phoneJid && phoneJid !== messageJid) jids.push(phoneJid);
 
-  const res = await api('POST', '/chat/findMessages/' + currentInstance, {
-    where: { key: { remoteJid: jid } },
-    offset: 100,
-    page: 1
+  // Fetch messages from all JID variants and merge
+  const allResults = await Promise.all(jids.map(jid =>
+    api('POST', '/chat/findMessages/' + currentInstance, {
+      where: { key: { remoteJid: jid } }, offset: 100, page: 1
+    })
+  ));
+
+  // Merge and deduplicate by message ID
+  const seenIds = new Set();
+  let mergedMsgs = [];
+  let totalFromApi = 0;
+  allResults.forEach(r => {
+    const msgs = extractMessages(r.ok ? r.data : null);
+    totalFromApi += r.ok && r.data?.messages?.total ? r.data.messages.total : msgs.length;
+    msgs.forEach(m => {
+      const mid = m.key?.id || m.id;
+      if (mid && !seenIds.has(mid)) { seenIds.add(mid); mergedMsgs.push(m); }
+    });
   });
+
+  // Build a fake response for the rendering code below
+  const res = { ok: true, data: { messages: { total: totalFromApi, records: mergedMsgs } } };
 
   const container = document.getElementById('msgContainer');
   if (!container) return;
