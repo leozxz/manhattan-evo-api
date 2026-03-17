@@ -2562,26 +2562,41 @@ function startSSE() {
         const phoneFromJid = isPrivateJid(remoteJid) ? remoteJid.split('@')[0] : '';
         const phoneFromAlt = remoteJidAlt && isPrivateJid(remoteJidAlt) ? remoteJidAlt.split('@')[0] : '';
 
-        // Skip if it's the currently open chat (match by JID or phone, including BR 9-digit)
-        const selectedPhone = selectedGroupData?.phone || (selectedGroup ? selectedGroup.split('@')[0] : '');
-        if (remoteJid === selectedGroup || remoteJidAlt === selectedGroup) return;
-        if (selectedPhone) {
-          const incomingPhone = phoneFromJid || phoneFromAlt;
-          if (incomingPhone === selectedPhone || (incomingPhone && incomingPhone.slice(-8) === selectedPhone.slice(-8))) return;
-        }
-
         const incomingPhone = phoneFromJid || phoneFromAlt;
 
         // Skip deleted chats
         if (isDeletedChat(remoteJid)) return;
 
-        // Try to find the chat by exact JID, alt JID, or phone number
-        let chat = allChats.find(c => c.id === remoteJid);
-        if (!chat && remoteJidAlt) {
-          chat = allChats.find(c => c.id === remoteJidAlt);
-        }
-        if (!chat) {
+        // Find the chat — try all possible matches
+        let chat = allChats.find(c =>
+          c.id === remoteJid ||
+          c.id === remoteJidAlt ||
+          c.messageJid === remoteJid ||
+          c.messageJid === remoteJidAlt
+        );
+        // Match by phone (last 8 digits)
+        if (!chat && incomingPhone) {
           chat = findChatByPhone(incomingPhone);
+          // Also try scanning all chats for phone in ID (for LID chats with no phone field)
+          if (!chat) {
+            const pk = phoneKey(incomingPhone);
+            chat = allChats.find(c => {
+              if (c.phone && phoneKey(c.phone) === pk) return true;
+              // Check if any JID on the chat contains this phone
+              const idPhone = c.id?.split('@')[0] || '';
+              if (idPhone && phoneKey(idPhone) === pk) return true;
+              const mjPhone = c.messageJid?.split('@')[0] || '';
+              if (mjPhone && phoneKey(mjPhone) === pk) return true;
+              return false;
+            });
+          }
+        }
+
+        // Skip if it's the currently open chat
+        if (chat && (chat.id === selectedGroup || chat.messageJid === selectedGroup)) return;
+        if (!chat) {
+          const selectedPhone = selectedGroupData?.phone || '';
+          if (selectedPhone && incomingPhone && phoneKey(incomingPhone) === phoneKey(selectedPhone)) return;
         }
 
         if (!chat) {
