@@ -2557,20 +2557,19 @@ function startSSE() {
         // Resolve the real remoteJid (may come as LID, try alternatives)
         let remoteJid = key.remoteJid || '';
         const remoteJidAlt = key.remoteJidAlt || '';
+        // If remoteJid is LID and we have alt, prefer the alt
+        if (remoteJid.endsWith('@lid') && remoteJidAlt && isPrivateJid(remoteJidAlt)) {
+          remoteJid = remoteJidAlt;
+        }
 
         // Extract phone numbers from JIDs for matching
         const phoneFromJid = isPrivateJid(remoteJid) ? remoteJid.split('@')[0] : '';
         const phoneFromAlt = remoteJidAlt && isPrivateJid(remoteJidAlt) ? remoteJidAlt.split('@')[0] : '';
+        // For LID without alt, try to extract from participant or pushName lookup
+        const participantPhone = key.participant && isPrivateJid(key.participant) ? key.participant.split('@')[0] : '';
+        const participantAltPhone = key.participantAlt && isPrivateJid(key.participantAlt) ? key.participantAlt.split('@')[0] : '';
 
-        const incomingPhone = phoneFromJid || phoneFromAlt;
-
-        // DEBUG: log what arrived and what we have
-        console.log('[SSE MATCH]', {
-          remoteJid,
-          remoteJidAlt,
-          incomingPhone,
-          chats: allChats.filter(c => !c.isGroup).map(c => ({ id: c.id, messageJid: c.messageJid, phone: c.phone }))
-        });
+        const incomingPhone = phoneFromJid || phoneFromAlt || participantAltPhone || participantPhone;
 
         // Skip deleted chats
         if (isDeletedChat(remoteJid)) return;
@@ -2608,13 +2607,13 @@ function startSSE() {
         }
 
         if (!chat) {
-          // Truly new chat — use the best JID available (prefer @s.whatsapp.net over @lid)
-          const bestJid = (remoteJidAlt && isPrivateJid(remoteJidAlt)) ? remoteJidAlt : remoteJid;
+          // New chat — prefer @s.whatsapp.net JID, use phone if available
+          const bestJid = isPrivateJid(remoteJid) ? remoteJid : (remoteJidAlt && isPrivateJid(remoteJidAlt) ? remoteJidAlt : remoteJid);
           const isGroup = isGroupJid(bestJid);
-          let chatPhone = isPrivateJid(bestJid) ? bestJid.split('@')[0] : incomingPhone;
+          let chatPhone = incomingPhone || (isPrivateJid(bestJid) ? bestJid.split('@')[0] : '');
           chat = {
             id: bestJid,
-            messageJid: remoteJid, // The JID from the webhook (same as stored in DB)
+            messageJid: key.remoteJid || remoteJid, // Original JID from webhook (as stored in DB)
             isGroup: isGroup,
             subject: d.pushName || '',
             pushName: d.pushName || '',
@@ -2628,12 +2627,17 @@ function startSSE() {
           if (isGroup) groups.push(chat);
           rebuildPhoneIndex();
 
-          // Resolve phone in background for LID chats
+          // Resolve phone in background for chats without phone
           if (!chatPhone && !isGroup) {
             api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers: [bestJid] }).then(r => {
               if (r.ok && Array.isArray(r.data) && r.data[0]?.number) {
                 chat.phone = String(r.data[0].number).replace(/\D/g, '');
+                if (!chat.messageJid || chat.messageJid.endsWith('@lid')) {
+                  const resolved = r.data[0].jid || (chat.phone + '@s.whatsapp.net');
+                  chat.messageJid = resolved;
+                }
                 rebuildPhoneIndex();
+                renderGroupList();
               }
             }).catch(() => {});
           }
