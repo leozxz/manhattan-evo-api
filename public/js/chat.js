@@ -2471,20 +2471,29 @@ function startSSE() {
         const phoneFromJid = isPrivateJid(remoteJid) ? remoteJid.split('@')[0] : '';
         const phoneFromAlt = remoteJidAlt && isPrivateJid(remoteJidAlt) ? remoteJidAlt.split('@')[0] : '';
 
-        // Skip if it's the currently open chat (match by JID or phone)
+        // Skip if it's the currently open chat (match by JID or phone, including BR 9-digit)
         const selectedPhone = selectedGroupData?.phone || (selectedGroup ? selectedGroup.split('@')[0] : '');
         if (remoteJid === selectedGroup || remoteJidAlt === selectedGroup) return;
-        if (selectedPhone && (phoneFromJid === selectedPhone || phoneFromAlt === selectedPhone)) return;
+        if (selectedPhone) {
+          const incomingPhone = phoneFromJid || phoneFromAlt;
+          if (incomingPhone === selectedPhone || (incomingPhone && incomingPhone.slice(-8) === selectedPhone.slice(-8))) return;
+        }
 
         // Try to find the chat by exact JID, alt JID, or phone number
         let chat = allChats.find(c => c.id === remoteJid);
         if (!chat && remoteJidAlt) {
           chat = allChats.find(c => c.id === remoteJidAlt);
         }
-        // Match by phone number (handles LID ↔ s.whatsapp.net mismatch)
+        // Match by phone number (handles LID ↔ s.whatsapp.net mismatch and BR 9-digit)
         if (!chat && (phoneFromJid || phoneFromAlt)) {
           const phone = phoneFromJid || phoneFromAlt;
-          chat = allChats.find(c => c.phone === phone);
+          chat = allChats.find(c => {
+            if (!c.phone) return false;
+            if (c.phone === phone) return true;
+            // Normalize: compare last 8 digits (handles BR +55 9-digit variants)
+            const tail = phone.slice(-8);
+            return c.phone.slice(-8) === tail;
+          });
         }
 
         if (!chat) {
