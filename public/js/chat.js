@@ -29,21 +29,25 @@ async function getSendNumber() {
   if (!selectedGroup) return '';
   // For groups, use group JID directly
   if (isGroupJid(selectedGroup)) return selectedGroup;
-  // For individual chats, prefer phone number
-  if (selectedGroupData?.phone) return selectedGroupData.phone;
-  // Extract phone from any @s.whatsapp.net JID we have
+  // For individual chats, prefer real phone number (not LID IDs)
+  const phone = selectedGroupData?.phone || '';
+  if (phone && phone.length <= 15 && /^[1-9]\d{9,14}$/.test(phone)) return phone;
+  // Extract phone from any @s.whatsapp.net JID
   const mJid = selectedGroupData?.messageJid || selectedGroup;
   if (isPrivateJid(mJid)) return mJid.split('@')[0];
-  // LID or unknown: resolve via whatsappNumbers API
+  // LID: try to resolve real phone via whatsappNumbers
   try {
     const res = await api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers: [mJid] });
-    if (res.ok && Array.isArray(res.data) && res.data[0]?.number) {
-      const phone = String(res.data[0].number).replace(/\D/g, '');
-      if (selectedGroupData) selectedGroupData.phone = phone;
-      rebuildPhoneIndex();
-      return phone;
+    if (res.ok && Array.isArray(res.data)) {
+      const found = res.data[0];
+      if (found?.jid && isPrivateJid(found.jid)) {
+        const realPhone = found.jid.split('@')[0];
+        if (selectedGroupData) { selectedGroupData.phone = realPhone; rebuildPhoneIndex(); }
+        return realPhone;
+      }
     }
   } catch {}
+  // Last resort: send the full LID JID (Evolution API can handle it)
   return mJid;
 }
 
