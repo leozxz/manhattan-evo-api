@@ -1412,24 +1412,47 @@ function previewImage(src) {
 async function fetchAndRenderMessages() {
   if (!selectedGroup || !currentInstance) return;
 
-  let res = await api('POST', '/chat/findMessages/' + currentInstance, {
-    where: { key: { remoteJid: selectedGroup } },
-    offset: 100,
-    page: 1
-  });
+  // Build list of JIDs to try (handles LID, phone format variants)
+  const jidsToTry = [selectedGroup];
+  const phone = selectedGroupData?.phone || '';
+  if (phone) {
+    const phoneJid = phone + '@s.whatsapp.net';
+    if (!jidsToTry.includes(phoneJid)) jidsToTry.push(phoneJid);
+    // BR 9-digit variant: try with/without leading 9 after area code
+    if (phone.startsWith('55') && phone.length === 13) {
+      // Has 9 digit (5511 9xxxx xxxx) → try without (5511 xxxx xxxx)
+      const without9 = phone.slice(0, 4) + phone.slice(5);
+      jidsToTry.push(without9 + '@s.whatsapp.net');
+    } else if (phone.startsWith('55') && phone.length === 12) {
+      // Missing 9 digit (5511 xxxx xxxx) → try with (5511 9xxxx xxxx)
+      const with9 = phone.slice(0, 4) + '9' + phone.slice(4);
+      jidsToTry.push(with9 + '@s.whatsapp.net');
+    }
+  }
 
-  // If no messages found and chat has a phone, try with @s.whatsapp.net JID
-  let msgs0 = extractMessages(res.ok ? res.data : null);
-  console.log('[Messages]', { selectedGroup, phone: selectedGroupData?.phone, found: msgs0.length });
-  if (msgs0.length === 0 && selectedGroupData?.phone) {
-    const altJid = selectedGroupData.phone + '@s.whatsapp.net';
-    console.log('[Messages] retrying with', altJid);
-    if (altJid !== selectedGroup) {
-      res = await api('POST', '/chat/findMessages/' + currentInstance, {
-        where: { key: { remoteJid: altJid } },
-        offset: 100,
-        page: 1
-      });
+  let res = null;
+  for (const jid of jidsToTry) {
+    res = await api('POST', '/chat/findMessages/' + currentInstance, {
+      where: { key: { remoteJid: jid } },
+      offset: 100,
+      page: 1
+    });
+    const msgs = extractMessages(res.ok ? res.data : null);
+    if (msgs.length > 0) break;
+  }
+
+  // Last resort: resolve via whatsappNumbers API
+  if (phone && extractMessages(res?.ok ? res.data : null).length === 0) {
+    const wnRes = await api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers: [phone] });
+    if (wnRes.ok && Array.isArray(wnRes.data)) {
+      const found = wnRes.data.find(n => n.jid);
+      if (found && found.jid && !jidsToTry.includes(found.jid)) {
+        res = await api('POST', '/chat/findMessages/' + currentInstance, {
+          where: { key: { remoteJid: found.jid } },
+          offset: 100,
+          page: 1
+        });
+      }
     }
   }
 
@@ -2583,12 +2606,13 @@ function startSSE() {
           // Truly new chat — use the best JID available (prefer @s.whatsapp.net over @lid)
           const bestJid = (remoteJidAlt && isPrivateJid(remoteJidAlt)) ? remoteJidAlt : remoteJid;
           const isGroup = isGroupJid(bestJid);
+          let chatPhone = isPrivateJid(bestJid) ? bestJid.split('@')[0] : incomingPhone;
           chat = {
             id: bestJid,
             isGroup: isGroup,
             subject: d.pushName || '',
             pushName: d.pushName || '',
-            phone: isPrivateJid(bestJid) ? bestJid.split('@')[0] : '',
+            phone: chatPhone,
             size: 0,
             profilePicUrl: null,
             lastMessageTs: 0,
@@ -2597,6 +2621,16 @@ function startSSE() {
           allChats.push(chat);
           if (isGroup) groups.push(chat);
           rebuildPhoneIndex();
+
+          // Resolve phone in background for LID chats
+          if (!chatPhone && !isGroup) {
+            api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers: [bestJid] }).then(r => {
+              if (r.ok && Array.isArray(r.data) && r.data[0]?.number) {
+                chat.phone = String(r.data[0].number).replace(/\D/g, '');
+                rebuildPhoneIndex();
+              }
+            }).catch(() => {});
+          }
         }
 
         chat.unreadCount = (chat.unreadCount || 0) + 1;
