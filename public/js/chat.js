@@ -86,6 +86,18 @@ async function loadGroups() {
       if (alt && alt.includes('@s.whatsapp.net')) phone = alt.split('@')[0];
     }
 
+    // Determine unread count: respect chatLastSeen if user already read it
+    const msgTs = typeof lastTs === 'string' ? parseInt(lastTs) : lastTs;
+    const lastSeen = chatLastSeen[jid] || 0;
+    let unread = 0;
+    if (lastSeen >= msgTs) {
+      unread = 0; // User has seen this chat after the last message
+    } else if (c.unreadCount != null && c.unreadCount > 0) {
+      unread = c.unreadCount; // API has a real count (groups)
+    } else if (msgTs > 0 && !isGroup && c.lastMessage && !c.lastMessage.key?.fromMe) {
+      unread = 1; // Private chat with unseen incoming message
+    }
+
     chatMap[jid] = {
       id: jid,
       isGroup: isGroup,
@@ -94,8 +106,8 @@ async function loadGroups() {
       phone: phone,
       size: gm?.size || 0,
       profilePicUrl: c.profilePicUrl || null,
-      lastMessageTs: typeof lastTs === 'string' ? parseInt(lastTs) : lastTs,
-      unreadCount: c.unreadCount || 0
+      lastMessageTs: msgTs,
+      unreadCount: unread
     };
 
     // Store contact name
@@ -253,9 +265,9 @@ function updateSidebarBadge() {
 }
 
 function renderGroupList() {
+  updateSidebarBadge();
   const list = document.getElementById('groupList');
   if (!list) return;
-  updateSidebarBadge();
 
   // Filter based on active tab
   let filtered = allChats;
@@ -281,7 +293,7 @@ function renderGroupList() {
 
   sorted.forEach(c => {
     const item = document.createElement('div');
-    const hasUnread = c.unreadCount > 0 && selectedGroup !== c.id;
+    const hasUnread = c.unreadCount > 0;
     item.className = 'chat-item' + (selectedGroup === c.id ? ' active' : '') + (hasUnread ? ' chat-item-unread' : '');
     item.onclick = () => { selectGroup(c, item); };
     const lastTs = groupLastMsg[c.id] || c.lastMessageTs;
