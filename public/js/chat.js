@@ -253,15 +253,25 @@ async function fetchGroupTimestamps(groupList) {
 }
 
 function updateSidebarBadge() {
-  const total = allChats.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+  let totalGroups = 0, totalPrivate = 0;
+  allChats.forEach(c => {
+    const u = c.unreadCount || 0;
+    if (u > 0) { if (c.isGroup) totalGroups += u; else totalPrivate += u; }
+  });
+  const total = totalGroups + totalPrivate;
+
+  // Sidebar badge
   const badge = document.getElementById('sidebarUnreadBadge');
-  if (!badge) return;
-  if (total > 0) {
-    badge.textContent = total > 99 ? '99+' : total;
-    badge.style.display = 'flex';
-  } else {
-    badge.style.display = 'none';
+  if (badge) {
+    if (total > 0) { badge.textContent = total > 99 ? '99+' : total; badge.style.display = 'flex'; }
+    else { badge.style.display = 'none'; }
   }
+
+  // Tab badges
+  const setTab = (id, count) => { const el = document.getElementById(id); if (el) el.textContent = count > 0 ? (count > 99 ? '99+' : count) : ''; };
+  setTab('tabBadgeAll', total);
+  setTab('tabBadgeGroups', totalGroups);
+  setTab('tabBadgePrivate', totalPrivate);
 }
 
 function renderGroupList() {

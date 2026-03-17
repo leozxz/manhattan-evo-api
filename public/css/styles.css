@@ -474,6 +474,14 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 }
 .chat-filter-tab:hover { background: var(--border-light); }
 .chat-filter-tab.active { background: var(--accent); color: #fff; }
+.tab-badge {
+  font-size: 10px; font-weight: 700; min-width: 16px; height: 16px;
+  border-radius: 8px; display: inline-flex; align-items: center;
+  justify-content: center; padding: 0 4px; margin-left: 2px;
+  background: #ef4444; color: #fff; vertical-align: middle;
+}
+.tab-badge:empty { display: none; }
+.chat-filter-tab.active .tab-badge { background: rgba(255,255,255,0.3); }
 
 /* Chat search */
 .chat-search { padding: 8px 12px; border-bottom: 1px solid var(--border-light); flex-shrink: 0; }

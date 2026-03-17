@@ -151,9 +151,9 @@
               </div>
             </div>
             <div class="chat-filter-tabs">
-              <button class="chat-filter-tab active" data-filter="all" onclick="setChatFilter('all')">Todos</button>
-              <button class="chat-filter-tab" data-filter="groups" onclick="setChatFilter('groups')">Grupos</button>
-              <button class="chat-filter-tab" data-filter="private" onclick="setChatFilter('private')">Conversas</button>
+              <button class="chat-filter-tab active" data-filter="all" onclick="setChatFilter('all')">Todos <span class="tab-badge" id="tabBadgeAll"></span></button>
+              <button class="chat-filter-tab" data-filter="groups" onclick="setChatFilter('groups')">Grupos <span class="tab-badge" id="tabBadgeGroups"></span></button>
+              <button class="chat-filter-tab" data-filter="private" onclick="setChatFilter('private')">Conversas <span class="tab-badge" id="tabBadgePrivate"></span></button>
             </div>
             <div class="chat-search">
               <input type="text" class="chat-search-input" id="chatSearchInput" placeholder="Buscar conversas..." oninput="handleChatSearch(this.value)">
