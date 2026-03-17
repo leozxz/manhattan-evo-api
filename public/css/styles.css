@@ -293,6 +293,13 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
   font-weight: 700; font-size: 14px; flex-shrink: 0;
   letter-spacing: -0.2px;
 }
+.new-chat-btn {
+  width: 30px; height: 30px; border: none; border-radius: 50%;
+  background: var(--accent); color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.new-chat-btn:hover { background: var(--accent-hover); }
 .chat-list-body { flex: 1; overflow-y: auto; }
 
 .chat-item {

@@ -358,6 +358,96 @@ function renderGroupList() {
 }
 
 // =====================
+// =====================
+// NEW CHAT
+// =====================
+function showNewChatModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'newChatModal';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <h3>Nova conversa</h3>
+      <div class="form-group">
+        <label>Numero (com DDI + DDD)</label>
+        <input type="text" id="newChatNumber" placeholder="5511999999999" autofocus>
+      </div>
+      <div class="form-group" id="newChatStatus" style="display:none"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('newChatModal').remove()">Cancelar</button>
+        <button class="btn btn-primary" id="newChatBtn" onclick="startNewChat()">Iniciar conversa</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('newChatNumber').addEventListener('keydown', (e) => { if (e.key === 'Enter') startNewChat(); });
+}
+
+async function startNewChat() {
+  if (!ensureConnected()) return;
+  const input = document.getElementById('newChatNumber');
+  const status = document.getElementById('newChatStatus');
+  const btn = document.getElementById('newChatBtn');
+  const num = input.value.trim().replace(/[^0-9]/g, '');
+
+  if (!num || num.length < 10) {
+    status.style.display = 'block';
+    status.innerHTML = '<span style="color:var(--danger);font-size:13px">Numero invalido (use DDI+DDD+numero)</span>';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Verificando...';
+  status.style.display = 'block';
+  status.innerHTML = '<span style="color:var(--text-secondary);font-size:13px">Verificando numero no WhatsApp...</span>';
+
+  // Check if number is on WhatsApp
+  const check = await api('POST', '/chat/whatsappNumbers/' + currentInstance, { numbers: [num] });
+  if (!check.ok || !Array.isArray(check.data)) {
+    status.innerHTML = '<span style="color:var(--danger);font-size:13px">Erro ao verificar numero</span>';
+    btn.disabled = false; btn.textContent = 'Iniciar conversa';
+    return;
+  }
+
+  const found = check.data.find(n => n.exists === true || n.exists === 'true');
+  if (!found) {
+    status.innerHTML = '<span style="color:var(--danger);font-size:13px">Numero nao esta no WhatsApp</span>';
+    btn.disabled = false; btn.textContent = 'Iniciar conversa';
+    return;
+  }
+
+  // Close modal
+  document.getElementById('newChatModal').remove();
+
+  // Build JID
+  const jid = found.jid || (num + '@s.whatsapp.net');
+  const phone = jid.split('@')[0];
+
+  // Find existing chat or create new one
+  let chat = allChats.find(c => c.id === jid || c.phone === phone);
+  if (!chat) {
+    chat = {
+      id: jid,
+      isGroup: false,
+      subject: '',
+      pushName: found.name || '',
+      phone: phone,
+      size: 0,
+      profilePicUrl: null,
+      lastMessageTs: 0,
+      unreadCount: 0
+    };
+    allChats.push(chat);
+    if (found.name) contactNames[jid] = found.name;
+    renderGroupList();
+  }
+
+  // Open the chat
+  selectGroup(chat, null);
+  // Switch to "Conversas" filter
+  setChatFilter('private');
+}
+
 // CHAT ITEM MENU
 // =====================
 let activeChatMenu = null;
