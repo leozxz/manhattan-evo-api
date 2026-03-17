@@ -1991,7 +1991,10 @@ async function sendMsg() {
 
   // Build body with mentions
   const { mentioned, everyOne } = parseMentions(text);
-  const body = { number: await getSendNumber(), text };
+  const sendNumber = await getSendNumber();
+  console.log('[SEND]', { sendNumber, selectedGroup, phone: selectedGroupData?.phone, messageJid: selectedGroupData?.messageJid });
+  if (!sendNumber) { toast('Numero nao encontrado', 'error'); return; }
+  const body = { number: sendNumber, text };
 
   if (mentioned.length > 0) body.mentioned = mentioned;
   if (everyOne) body.everyOne = true;
