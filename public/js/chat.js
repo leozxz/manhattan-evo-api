@@ -24,12 +24,18 @@ let allChats = []; // unified list: groups + individual chats
 
 function isGroupJid(jid) { return jid && jid.endsWith('@g.us'); }
 function isPrivateJid(jid) { return jid && jid.endsWith('@s.whatsapp.net'); }
-// Get the best JID for sending messages (Evolution API normalizes via whatsappNumber)
+// Get the best JID for sending messages
 function getSendJid() {
   if (!selectedGroup) return '';
-  // Prefer phone@s.whatsapp.net for sending (API normalizes it)
-  if (selectedGroupData?.phone) return selectedGroupData.phone + '@s.whatsapp.net';
-  return selectedGroupData?.messageJid || selectedGroup;
+  // For groups, use group JID directly
+  if (isGroupJid(selectedGroup)) return selectedGroup;
+  // For individual chats, prefer phone number (API normalizes it)
+  if (selectedGroupData?.phone) return selectedGroupData.phone;
+  // Extract phone from any @s.whatsapp.net JID we have
+  const mJid = selectedGroupData?.messageJid || selectedGroup;
+  if (isPrivateJid(mJid)) return mJid.split('@')[0];
+  // Last resort: return the JID as-is
+  return mJid;
 }
 
 function phoneKey(phone) { return phone ? phone.slice(-8) : ''; }
