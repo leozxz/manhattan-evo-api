@@ -590,6 +590,16 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 .knowledge-entity-value { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
 .knowledge-actions { padding: 12px 16px; border-top: 1px solid var(--border-light); margin-top: auto; }
 
+/* Knowledge graph modal */
+.graph-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; }
+.graph-modal { background: #fff; border-radius: 12px; width: 90vw; max-width: 900px; height: 75vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+.graph-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 700; flex-shrink: 0; }
+.graph-modal-body { flex: 1; position: relative; overflow: hidden; }
+.graph-modal-body canvas { width: 100%; height: 100%; display: block; }
+.graph-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 10px 20px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.graph-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
+.graph-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
 /* Panel tabs */
 .panel-tabs { display: flex; gap: 0; }
 .panel-tab {

@@ -767,7 +767,12 @@ async function selectGroup(chat, el) {
       </div>` : `<div class="group-panel knowledge-panel" id="knowledgePanel" style="display:none">
         <div class="group-panel-header">
           <span style="font-size:13px;font-weight:700">Perfil do Cliente</span>
-          <button class="btn btn-secondary btn-sm" onclick="toggleKnowledgePanel()">&times;</button>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-secondary btn-sm" onclick="openKnowledgeGraph()" title="Visualizar grafo">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#54656f"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><line x1="7.5" y1="12" x2="16.5" y2="6" stroke="#54656f" stroke-width="1.5"/><line x1="7.5" y1="12" x2="16.5" y2="18" stroke="#54656f" stroke-width="1.5"/></svg>
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="toggleKnowledgePanel()">&times;</button>
+          </div>
         </div>
         <div class="group-panel-body" id="knowledgePanelBody">
           <div class="spinner" style="margin-top:40px"></div>
@@ -969,6 +974,270 @@ async function deleteKnowledge() {
   } catch {
     toast('Erro ao remover', 'error');
   }
+}
+
+// =====================
+// KNOWLEDGE GRAPH VISUALIZATION (Canvas)
+// =====================
+const CATEGORY_COLORS = {
+  PESSOA: '#6366f1', FAMILIA: '#ec4899', FINANCEIRO: '#10b981',
+  SAUDE: '#ef4444', MORADIA: '#f59e0b', TRABALHO: '#3b82f6',
+  EDUCACAO: '#8b5cf6', INTERESSE: '#14b8a6', EVENTO: '#f97316', SENTIMENTO: '#e879f9',
+};
+
+async function openKnowledgeGraph() {
+  const res = await api('GET', '/knowledge/contact/' + currentInstance + '?remoteJid=' + encodeURIComponent(selectedGroup));
+  if (!res.ok || !res.data || !res.data.entities || res.data.entities.length === 0) {
+    toast('Nenhum dado para exibir no grafo', 'error');
+    return;
+  }
+
+  const data = res.data;
+  const contactName = data.pushName || selectedGroup.split('@')[0];
+
+  // Build modal
+  const overlay = document.createElement('div');
+  overlay.className = 'graph-modal-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  const modal = document.createElement('div');
+  modal.className = 'graph-modal';
+  modal.innerHTML = `
+    <div class="graph-modal-header">
+      <span>Grafo de Conhecimento</span>
+      <button class="btn btn-secondary btn-sm" onclick="this.closest('.graph-modal-overlay').remove()">&times;</button>
+    </div>
+    <div class="graph-modal-body">
+      <canvas id="knowledgeCanvas"></canvas>
+    </div>
+    <div class="graph-legend" id="graphLegend"></div>
+  `;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Wait for DOM
+  requestAnimationFrame(() => {
+    const canvas = document.getElementById('knowledgeCanvas');
+    const container = canvas.parentElement;
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+    renderGraph(canvas, data, contactName);
+  });
+}
+
+function renderGraph(canvas, data, contactName) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  const cx = W / 2;
+  const cy = H / 2;
+
+  // Build nodes: center = contact, then category hubs, then entities
+  const nodes = [];
+  const edges = [];
+
+  // Center node
+  const center = { id: '__contact__', label: contactName, x: cx, y: cy, r: 28, color: '#111b21', type: 'contact' };
+  nodes.push(center);
+
+  // Group entities by category
+  const grouped = {};
+  (data.entities || []).forEach(e => {
+    if (!grouped[e.category]) grouped[e.category] = [];
+    grouped[e.category].push(e);
+  });
+
+  const categories = Object.keys(grouped);
+  const catCount = categories.length;
+
+  categories.forEach((cat, ci) => {
+    const angle = (2 * Math.PI * ci) / catCount - Math.PI / 2;
+    const catRadius = Math.min(W, H) * 0.28;
+    const catX = cx + Math.cos(angle) * catRadius;
+    const catY = cy + Math.sin(angle) * catRadius;
+    const catColor = CATEGORY_COLORS[cat] || '#6b7280';
+    const catLabel = (KNOWLEDGE_CATEGORIES[cat] || { label: cat }).label;
+
+    // Category hub node
+    const catNode = { id: 'cat_' + cat, label: catLabel, x: catX, y: catY, r: 20, color: catColor, type: 'category' };
+    nodes.push(catNode);
+    edges.push({ from: center, to: catNode, color: catColor + '40' });
+
+    // Entity nodes around category hub
+    const entities = grouped[cat];
+    const entCount = entities.length;
+    const entRadius = Math.min(W, H) * 0.13;
+
+    entities.forEach((ent, ei) => {
+      const eAngle = angle + ((ei - (entCount - 1) / 2) * 0.4);
+      const entX = catX + Math.cos(eAngle) * entRadius;
+      const entY = catY + Math.sin(eAngle) * entRadius;
+
+      const entNode = { id: ent.id, label: ent.label, value: ent.value, x: entX, y: entY, r: 12, color: catColor, type: 'entity' };
+      nodes.push(entNode);
+      edges.push({ from: catNode, to: entNode, color: catColor + '30' });
+    });
+  });
+
+  // Add relationship edges
+  const nodeById = {};
+  nodes.forEach(n => { nodeById[n.id] = n; });
+  (data.relationships || []).forEach(r => {
+    const fromNode = nodes.find(n => n.label === r.fromEntity?.label && n.type === 'entity');
+    const toNode = nodes.find(n => n.label === r.toEntity?.label && n.type === 'entity');
+    if (fromNode && toNode) {
+      edges.push({ from: fromNode, to: toNode, color: '#f59e0b', dashed: true, label: r.type });
+    }
+  });
+
+  // Tooltip state
+  let hoveredNode = null;
+  let tooltip = { visible: false, x: 0, y: 0, text: '' };
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = '#fafafa';
+    ctx.fillRect(0, 0, W, H);
+
+    // Draw edges
+    edges.forEach(e => {
+      ctx.beginPath();
+      ctx.moveTo(e.from.x, e.from.y);
+      ctx.lineTo(e.to.x, e.to.y);
+      ctx.strokeStyle = e.color || '#e5e7eb';
+      ctx.lineWidth = e.dashed ? 1 : 1.5;
+      if (e.dashed) ctx.setLineDash([4, 4]);
+      else ctx.setLineDash([]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // Draw nodes
+    nodes.forEach(n => {
+      const isHovered = hoveredNode === n;
+
+      // Glow on hover
+      if (isHovered) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r + 6, 0, 2 * Math.PI);
+        ctx.fillStyle = n.color + '20';
+        ctx.fill();
+      }
+
+      // Node circle
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, 2 * Math.PI);
+      if (n.type === 'contact') {
+        ctx.fillStyle = n.color;
+      } else if (n.type === 'category') {
+        ctx.fillStyle = n.color;
+      } else {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = n.color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      ctx.fill();
+
+      // Label
+      ctx.fillStyle = n.type === 'entity' ? '#333' : '#fff';
+      ctx.font = n.type === 'contact' ? 'bold 11px -apple-system,sans-serif' :
+                 n.type === 'category' ? 'bold 9px -apple-system,sans-serif' :
+                 '9px -apple-system,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      if (n.type === 'entity') {
+        // Label below node
+        ctx.fillStyle = '#555';
+        ctx.font = '9px -apple-system,sans-serif';
+        const shortLabel = n.label.length > 18 ? n.label.substring(0, 16) + '..' : n.label;
+        ctx.fillText(shortLabel, n.x, n.y + n.r + 10);
+      } else {
+        // Label inside node
+        const shortLabel = n.label.length > 12 ? n.label.substring(0, 10) + '..' : n.label;
+        ctx.fillText(shortLabel, n.x, n.y);
+      }
+    });
+
+    // Tooltip
+    if (tooltip.visible) {
+      const pad = 8;
+      ctx.font = '11px -apple-system,sans-serif';
+      const lines = tooltip.text.split('\n');
+      const lineHeight = 15;
+      const maxW = Math.max(...lines.map(l => ctx.measureText(l).width)) + pad * 2;
+      const boxH = lines.length * lineHeight + pad * 2;
+      let tx = tooltip.x + 15;
+      let ty = tooltip.y - boxH / 2;
+      if (tx + maxW > W) tx = tooltip.x - maxW - 15;
+      if (ty < 0) ty = 4;
+      if (ty + boxH > H) ty = H - boxH - 4;
+
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = 'rgba(0,0,0,0.15)';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.roundRect(tx, ty, maxW, boxH, 6);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#333';
+      lines.forEach((line, i) => {
+        ctx.font = i === 0 ? 'bold 11px -apple-system,sans-serif' : '11px -apple-system,sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(line, tx + pad, ty + pad + i * lineHeight + 10);
+      });
+    }
+  }
+
+  // Mouse interaction
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    hoveredNode = null;
+    tooltip.visible = false;
+
+    for (const n of nodes) {
+      const dx = mx - n.x;
+      const dy = my - n.y;
+      if (dx * dx + dy * dy < (n.r + 4) * (n.r + 4)) {
+        hoveredNode = n;
+        canvas.style.cursor = 'pointer';
+        if (n.type === 'entity' && n.value) {
+          tooltip = { visible: true, x: mx, y: my, text: n.label + '\n' + n.value };
+        } else if (n.type === 'contact') {
+          tooltip = { visible: true, x: mx, y: my, text: n.label };
+        }
+        break;
+      }
+    }
+    if (!hoveredNode) canvas.style.cursor = 'default';
+    draw();
+  };
+
+  canvas.onmouseleave = () => {
+    hoveredNode = null;
+    tooltip.visible = false;
+    canvas.style.cursor = 'default';
+    draw();
+  };
+
+  // Legend
+  const legend = document.getElementById('graphLegend');
+  if (legend) {
+    legend.innerHTML = categories.map(cat => {
+      const color = CATEGORY_COLORS[cat] || '#6b7280';
+      const label = (KNOWLEDGE_CATEGORIES[cat] || { label: cat }).label;
+      return '<span class="graph-legend-item"><span class="graph-legend-dot" style="background:' + color + '"></span>' + label + '</span>';
+    }).join('');
+  }
+
+  draw();
 }
 
 async function loadGroupInfo() {
