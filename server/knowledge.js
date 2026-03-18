@@ -256,18 +256,80 @@ async function saveExtraction(db, instanceId, remoteJid, pushName, extraction) {
   return contactId;
 }
 
+// Resolve a remoteJid to all possible JID variants (LID, phone, etc.)
+async function resolveJidVariants(instanceName, remoteJid) {
+  const variants = [remoteJid];
+
+  // If it's a LID, try to resolve to phone JID
+  if (remoteJid.includes('@lid')) {
+    try {
+      const res = await evoRequest('POST', '/chat/whatsappNumbers/' + instanceName, {
+        numbers: [remoteJid],
+      });
+      if (Array.isArray(res)) {
+        for (const entry of res) {
+          if (entry.jid && !variants.includes(entry.jid)) variants.push(entry.jid);
+          // Also try the number@s.whatsapp.net format
+          if (entry.jid) {
+            const num = entry.jid.split('@')[0];
+            const phoneJid = num + '@s.whatsapp.net';
+            if (!variants.includes(phoneJid)) variants.push(phoneJid);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // If it's a phone JID, also check for LID variant in IsOnWhatsapp table
+  if (remoteJid.includes('@s.whatsapp.net')) {
+    const num = remoteJid.split('@')[0];
+    const lidJid = num + '@lid';
+    if (!variants.includes(lidJid)) variants.push(lidJid);
+  }
+
+  // Also try without the @suffix as a number
+  const rawNum = remoteJid.split('@')[0];
+  if (rawNum && !variants.includes(rawNum)) variants.push(rawNum);
+
+  return variants;
+}
+
 async function extractFromMessages(instanceId, instanceName, remoteJid, messageCount) {
   const db = getPool();
+  const limit = messageCount || 50;
 
-  // Fetch messages from Evolution API
-  const messages = await evoRequest('POST', '/chat/findMessages/' + instanceName, {
-    where: { key: { remoteJid } },
-    limit: messageCount || 50,
-  });
+  // Try multiple JID variants to find messages
+  const jidVariants = await resolveJidVariants(instanceName, remoteJid);
+  console.log('[Knowledge] Trying JID variants:', jidVariants);
 
-  if (!Array.isArray(messages) || messages.length === 0) {
-    throw new Error('No messages found for ' + remoteJid);
+  let allMessages = [];
+  const seenIds = new Set();
+
+  for (const jid of jidVariants) {
+    try {
+      const msgs = await evoRequest('POST', '/chat/findMessages/' + instanceName, {
+        where: { key: { remoteJid: jid } },
+        limit,
+      });
+      if (Array.isArray(msgs)) {
+        for (const m of msgs) {
+          const mid = m.key?.id || m.id;
+          if (mid && !seenIds.has(mid)) {
+            seenIds.add(mid);
+            allMessages.push(m);
+          }
+        }
+      }
+    } catch {}
   }
+
+  console.log('[Knowledge] Found', allMessages.length, 'messages across', jidVariants.length, 'JID variants');
+
+  if (allMessages.length === 0) {
+    throw new Error('No messages found for ' + remoteJid + ' (tried variants: ' + jidVariants.join(', ') + ')');
+  }
+
+  const messages = allMessages;
 
   // Extract text from messages
   const texts = messages
