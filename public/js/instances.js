@@ -154,7 +154,7 @@ async function addNewInstance() {
     readMessages: false, readStatus: false, syncFullHistory: false
   };
   if (webhookUrl) {
-    createBody.webhook = { enabled: true, url: webhookUrl, byEvents: false, events: ['CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'GROUPS_UPSERT', 'GROUP_PARTICIPANTS_UPDATE'] };
+    createBody.webhook = { enabled: true, url: webhookUrl, byEvents: false, events: ['CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'GROUPS_UPSERT', 'GROUP_PARTICIPANTS_UPDATE', 'PRESENCE_UPDATE'] };
   }
   const res = await api('POST', '/instance/create', createBody);
 

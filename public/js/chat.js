@@ -2738,12 +2738,19 @@ async function sendMsg() {
     if (replyMsg.key.participant) body.quoted.key.participant = replyMsg.key.participant;
   }
 
+  // Send composing presence before message (anti-ban)
+  await sendPresence('composing');
+  await new Promise(r => setTimeout(r, randomDelay(1000, 3000)));
+
   const res = await api('POST', '/message/sendText/' + currentInstance, body);
   if (!res.ok || !res.data || !res.data.key) {
     const errMsg = res.data?.response?.message;
     const isConnErr = typeof errMsg === 'string' && errMsg.includes('Connection') || (Array.isArray(errMsg) && errMsg.some(e => String(e).includes('Connection')));
     toast(isConnErr ? 'Conexao instavel, tente novamente' : 'Erro ao enviar mensagem', 'error');
   }
+
+  // Clear presence after sending
+  sendPresence('paused');
 }
 
 // =====================
@@ -2902,6 +2909,49 @@ async function sendLocation() {
 }
 
 // =====================
+// PRESENCE (anti-ban)
+// =====================
+function randomDelay(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+async function sendPresence(type) {
+  if (!currentInstance || !selectedGroup) return;
+  const number = await getSendNumber();
+  if (!number) return;
+  try {
+    await api('POST', '/chat/sendPresence/' + currentInstance, {
+      number,
+      presence: type,
+      delay: randomDelay(1000, 3000)
+    });
+  } catch {}
+}
+
+// Track remote typing indicators: remoteJid -> timeout
+const typingIndicators = {};
+
+function showTypingIndicator(name) {
+  const container = document.getElementById('msgContainer');
+  if (!container) return;
+  let el = document.getElementById('typingIndicator');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'typingIndicator';
+    el.className = 'typing-indicator-wrapper';
+    container.appendChild(el);
+  }
+  el.innerHTML = '<div class="typing-indicator"><span class="typing-name">' + escapeHtml(name) + '</span> digitando<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span></div>';
+  el.style.display = '';
+  container.scrollTop = container.scrollHeight;
+}
+
+function hideTypingIndicator() {
+  const el = document.getElementById('typingIndicator');
+  if (el) el.style.display = 'none';
+}
+
+// =====================
 // AI SUGGESTION
 // =====================
 let aiSuggestLoading = false;
@@ -3039,6 +3089,10 @@ async function toggleRecording() {
         reader.readAsDataURL(blob);
       });
 
+      // Send recording presence before audio (anti-ban)
+      await sendPresence('recording');
+      await new Promise(r => setTimeout(r, randomDelay(1000, 3000)));
+
       const sendRes = await api('POST', '/message/sendWhatsAppAudio/' + currentInstance, {
         number: await getSendNumber(),
         audio: base64
@@ -3156,7 +3210,8 @@ function configureWebhook(instName) {
         'CONNECTION_UPDATE',
         'GROUP_PARTICIPANTS_UPDATE',
         'CHATS_UPDATE',
-        'CHATS_UPSERT'
+        'CHATS_UPSERT',
+        'PRESENCE_UPDATE'
       ]
     }
   }).catch(() => {});
@@ -3279,6 +3334,34 @@ function startSSE() {
       const payload = JSON.parse(e.data);
       const event = payload.event || '';
       console.log('[SSE]', event);
+
+      // Handle presence updates (typing indicators)
+      if (event === 'presence.update') {
+        const d = payload.data || payload;
+        const participantJid = d.id || '';
+        const presences = d.presences || d.presence || {};
+
+        // Check if it's for the currently selected chat
+        const chatJid = Object.keys(presences)[0] || participantJid;
+        const presenceData = presences[chatJid] || presences[Object.keys(presences)[0]] || {};
+        const status = presenceData.lastKnownPresence || d.status || '';
+
+        // Match against selected conversation
+        const isCurrentChat = chatJid === selectedGroup ||
+          participantJid === selectedGroup ||
+          (selectedGroupData?.messageJid && (chatJid === selectedGroupData.messageJid || participantJid === selectedGroupData.messageJid));
+
+        if (isCurrentChat && (status === 'composing' || status === 'recording')) {
+          const name = contactNames[chatJid] || contactNames[participantJid] || d.pushName || formatPhone(chatJid.split('@')[0] || '');
+          showTypingIndicator(name);
+          // Clear after 5s if no update
+          clearTimeout(typingIndicators[chatJid]);
+          typingIndicators[chatJid] = setTimeout(() => hideTypingIndicator(), 5000);
+        } else if (isCurrentChat && (status === 'paused' || status === 'available')) {
+          hideTypingIndicator();
+          clearTimeout(typingIndicators[chatJid]);
+        }
+      }
 
       // Handle incoming messages
       if (event === 'messages.upsert') {
