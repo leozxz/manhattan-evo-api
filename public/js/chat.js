@@ -766,10 +766,7 @@ async function selectGroup(chat, el) {
         </div>
       </div>` : `<div class="group-panel knowledge-panel" id="knowledgePanel" style="display:none">
         <div class="group-panel-header">
-          <div style="display:flex;align-items:center;gap:6px">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="#54656f"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-            <span style="font-size:13px;font-weight:700">Perfil do Cliente</span>
-          </div>
+          <span style="font-size:13px;font-weight:700">Perfil do Cliente</span>
           <button class="btn btn-secondary btn-sm" onclick="toggleKnowledgePanel()">&times;</button>
         </div>
         <div class="group-panel-body" id="knowledgePanelBody">
@@ -824,16 +821,16 @@ async function toggleKnowledgePanel() {
 }
 
 const KNOWLEDGE_CATEGORIES = {
-  PESSOA: { icon: '👤', label: 'Pessoas' },
-  FAMILIA: { icon: '👨‍👩‍👧‍👦', label: 'Familia' },
-  FINANCEIRO: { icon: '💰', label: 'Financeiro' },
-  SAUDE: { icon: '🏥', label: 'Saude' },
-  MORADIA: { icon: '🏠', label: 'Moradia' },
-  TRABALHO: { icon: '💼', label: 'Trabalho' },
-  EDUCACAO: { icon: '🎓', label: 'Educacao' },
-  INTERESSE: { icon: '⭐', label: 'Interesses' },
-  EVENTO: { icon: '📅', label: 'Eventos' },
-  SENTIMENTO: { icon: '😊', label: 'Sentimento' },
+  PESSOA: { label: 'Pessoas' },
+  FAMILIA: { label: 'Familia' },
+  FINANCEIRO: { label: 'Financeiro' },
+  SAUDE: { label: 'Saude' },
+  MORADIA: { label: 'Moradia' },
+  TRABALHO: { label: 'Trabalho' },
+  EDUCACAO: { label: 'Educacao' },
+  INTERESSE: { label: 'Interesses' },
+  EVENTO: { label: 'Eventos' },
+  SENTIMENTO: { label: 'Sentimento' },
 };
 
 async function loadKnowledgePanel() {
@@ -878,21 +875,18 @@ async function loadKnowledgePanel() {
 
     // Render each category
     for (const [cat, entities] of Object.entries(grouped)) {
-      const catInfo = KNOWLEDGE_CATEGORIES[cat] || { icon: '📋', label: cat };
+      const catInfo = KNOWLEDGE_CATEGORIES[cat] || { label: cat };
       const section = document.createElement('div');
       section.className = 'knowledge-section';
       section.innerHTML = `
         <div class="knowledge-category-header">
-          <span>${catInfo.icon}</span>
           <span>${catInfo.label}</span>
-          <span class="knowledge-count">${entities.length}</span>
         </div>
         <div class="knowledge-entities">
           ${entities.map(e => `
             <div class="knowledge-entity">
               <span class="knowledge-entity-label">${escapeHtml(e.label)}</span>
               <span class="knowledge-entity-value">${escapeHtml(e.value || '')}</span>
-              ${e.confidence < 0.8 ? '<span class="knowledge-low-confidence" title="Baixa confianca">?</span>' : ''}
             </div>
           `).join('')}
         </div>
@@ -906,9 +900,7 @@ async function loadKnowledgePanel() {
       relSection.className = 'knowledge-section';
       relSection.innerHTML = `
         <div class="knowledge-category-header">
-          <span>🔗</span>
           <span>Relacionamentos</span>
-          <span class="knowledge-count">${data.relationships.length}</span>
         </div>
         <div class="knowledge-entities">
           ${data.relationships.map(r => `

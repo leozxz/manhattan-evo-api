@@ -105,7 +105,7 @@ REGRAS:
 4. Identifique relacionamentos entre entidades quando possivel.
 5. Gere um resumo breve do perfil atualizado do cliente.
 6. FINANCEIRO: crie uma entidade SEPARADA para cada dado financeiro. Nunca agrupe tudo em uma entidade so. Inclua valores monetarios quando mencionados. Inclua a plataforma/banco quando mencionado.
-7. Use labels descritivos e unicos (ex: "investimento_binance" em vez de apenas "investimentos").
+7. LABELS devem ser em portugues, legíveis e formatados como titulo humano. Exemplos corretos: "Patrimonio Total", "Corretora Binance", "Perfil do Investidor", "Renda Mensal", "Estado Civil", "Nome da Mae". NUNCA use snake_case ou labels tecnicos como "investimento_binance" ou "patrimonio_total". Sempre use formato de titulo legivel.
 
 CONTEXTO EXISTENTE DO CLIENTE:
 {existingContext}
