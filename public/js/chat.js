@@ -113,15 +113,28 @@ async function loadGroups() {
   // Fetch all chats (groups + individual) from findChats
   const [chatsRes, groupsRes] = await Promise.all([
     api('POST', '/chat/findChats/' + currentInstance, {}),
-    api('GET', '/group/fetchAllGroups/' + currentInstance + '?getParticipants=false')
+    api('GET', '/group/fetchAllGroups/' + currentInstance + '?getParticipants=true')
   ]);
 
   if (currentInstance !== instanceAtStart) return;
 
-  // Build group metadata map from fetchAllGroups (has subject, size)
+  // Build group metadata map from fetchAllGroups (has subject, size, participants)
   const groupMeta = {};
   if (groupsRes.ok && Array.isArray(groupsRes.data)) {
-    groupsRes.data.forEach(g => { groupMeta[g.id] = g; });
+    groupsRes.data.forEach(g => {
+      groupMeta[g.id] = g;
+      // Extract participant names for group subtitle
+      if (Array.isArray(g.participants)) {
+        g._participantNames = g.participants
+          .map(p => {
+            const jid = typeof p === 'string' ? p : (p.id || '');
+            const phone = jid.split('@')[0];
+            return contactNames[jid] || p.pushName || p.name || p.notify || (isRealPhone(phone) ? formatPhone(phone) : phone);
+          })
+          .filter(Boolean)
+          .slice(0, 5);
+      }
+    });
   }
 
   // Process findChats response
@@ -219,7 +232,8 @@ async function loadGroups() {
       lastMessageTs: msgTs,
       unreadCount: unread,
       lastMsgPreview: lastMsgPreview,
-      lastMsgFromMe: !!c.lastMessage?.key?.fromMe
+      lastMsgFromMe: !!c.lastMessage?.key?.fromMe,
+      participantNames: gm?._participantNames || []
     };
 
     // Store contact name
@@ -239,7 +253,8 @@ async function loadGroups() {
         size: g.size || 0,
         profilePicUrl: null,
         lastMessageTs: groupLastMsg[g.id] || 0,
-        unreadCount: 0
+        unreadCount: 0,
+        participantNames: g._participantNames || []
       };
     }
   });
@@ -430,7 +445,12 @@ function renderGroupList() {
 
     if (c.isGroup) {
       displayName = c.subject || c.id;
-      subtitle = (c.size || '?') + ' participantes';
+      if (c.participantNames && c.participantNames.length > 0) {
+        subtitle = c.participantNames.join(', ');
+        if (c.size > c.participantNames.length) subtitle += ', +' + (c.size - c.participantNames.length);
+      } else {
+        subtitle = (c.size || '?') + ' participantes';
+      }
     } else {
       const phone = c.phone || c.id.split('@')[0];
       const formattedPhone = /^\d{10,15}$/.test(phone) ? formatPhone(phone) : phone;
