@@ -344,7 +344,7 @@ http.createServer((req, res) => {
   }
 
   // Proxy API routes to Evolution API (server-side, key never exposed)
-  const apiPrefixes = ['/instance/', '/message/', '/chat/', '/group/', '/webhook/'];
+  const apiPrefixes = ['/instance/', '/message/', '/chat/', '/group/', '/webhook/', '/knowledge/'];
   if (apiPrefixes.some(p => urlPath.startsWith(p))) {
     if (isRateLimited(ip)) {
       res.writeHead(429, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });

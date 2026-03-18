@@ -683,7 +683,10 @@ async function selectGroup(chat, el) {
   const panelBtn = isGroup ? `
           <button class="btn btn-secondary btn-sm" onclick="togglePanel()" title="Ver participantes" style="margin-left:8px">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="#54656f"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-          </button>` : '';
+          </button>` : `
+          <button class="btn btn-secondary btn-sm" onclick="toggleKnowledgePanel()" title="Perfil do cliente" style="margin-left:8px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#54656f"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+          </button>`;
 
   const area = document.getElementById('chatArea');
   area.innerHTML = `
@@ -761,7 +764,18 @@ async function selectGroup(chat, el) {
         <div class="group-panel-body" id="panelBody">
           <div class="spinner" style="margin-top:40px"></div>
         </div>
-      </div>` : ''}
+      </div>` : `<div class="group-panel knowledge-panel" id="knowledgePanel" style="display:none">
+        <div class="group-panel-header">
+          <div style="display:flex;align-items:center;gap:6px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#54656f"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+            <span style="font-size:13px;font-weight:700">Perfil do Cliente</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="toggleKnowledgePanel()">&times;</button>
+        </div>
+        <div class="group-panel-body" id="knowledgePanelBody">
+          <div class="spinner" style="margin-top:40px"></div>
+        </div>
+      </div>`}
     </div>
   `;
 
@@ -794,6 +808,170 @@ function switchPanelTab(tab) {
   document.querySelectorAll('.panel-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   if (tab === 'participants') loadParticipants();
   else loadGroupInfo();
+}
+
+// =====================
+// KNOWLEDGE PANEL (individual chats)
+// =====================
+let showKnowledgePanel = false;
+
+async function toggleKnowledgePanel() {
+  showKnowledgePanel = !showKnowledgePanel;
+  const panel = document.getElementById('knowledgePanel');
+  if (!panel) return;
+  panel.style.display = showKnowledgePanel ? 'flex' : 'none';
+  if (showKnowledgePanel) loadKnowledgePanel();
+}
+
+const KNOWLEDGE_CATEGORIES = {
+  PESSOA: { icon: '👤', label: 'Pessoas' },
+  FAMILIA: { icon: '👨‍👩‍👧‍👦', label: 'Familia' },
+  FINANCEIRO: { icon: '💰', label: 'Financeiro' },
+  SAUDE: { icon: '🏥', label: 'Saude' },
+  MORADIA: { icon: '🏠', label: 'Moradia' },
+  TRABALHO: { icon: '💼', label: 'Trabalho' },
+  EDUCACAO: { icon: '🎓', label: 'Educacao' },
+  INTERESSE: { icon: '⭐', label: 'Interesses' },
+  EVENTO: { icon: '📅', label: 'Eventos' },
+  SENTIMENTO: { icon: '😊', label: 'Sentimento' },
+};
+
+async function loadKnowledgePanel() {
+  const body = document.getElementById('knowledgePanelBody');
+  if (!body) return;
+  body.innerHTML = '<div class="spinner" style="margin-top:40px"></div>';
+
+  try {
+    const res = await api('GET', '/knowledge/contact/' + currentInstance + '?remoteJid=' + encodeURIComponent(selectedGroup));
+
+    if (!res.ok || !res.data) {
+      body.innerHTML = `
+        <div class="knowledge-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="#ccc"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          <p>Nenhuma informacao extraida ainda.</p>
+          <button class="btn btn-primary btn-sm" onclick="forceKnowledgeExtraction()">Analisar mensagens</button>
+        </div>
+      `;
+      return;
+    }
+
+    const data = res.data;
+    body.innerHTML = '';
+
+    // Summary
+    if (data.summary) {
+      const summaryEl = document.createElement('div');
+      summaryEl.className = 'knowledge-section';
+      summaryEl.innerHTML = `
+        <div class="knowledge-summary">${escapeHtml(data.summary)}</div>
+      `;
+      body.appendChild(summaryEl);
+    }
+
+    // Group entities by category
+    const grouped = {};
+    (data.entities || []).forEach(e => {
+      if (!grouped[e.category]) grouped[e.category] = [];
+      grouped[e.category].push(e);
+    });
+
+    // Render each category
+    for (const [cat, entities] of Object.entries(grouped)) {
+      const catInfo = KNOWLEDGE_CATEGORIES[cat] || { icon: '📋', label: cat };
+      const section = document.createElement('div');
+      section.className = 'knowledge-section';
+      section.innerHTML = `
+        <div class="knowledge-category-header">
+          <span>${catInfo.icon}</span>
+          <span>${catInfo.label}</span>
+          <span class="knowledge-count">${entities.length}</span>
+        </div>
+        <div class="knowledge-entities">
+          ${entities.map(e => `
+            <div class="knowledge-entity">
+              <span class="knowledge-entity-label">${escapeHtml(e.label)}</span>
+              <span class="knowledge-entity-value">${escapeHtml(e.value || '')}</span>
+              ${e.confidence < 0.8 ? '<span class="knowledge-low-confidence" title="Baixa confianca">?</span>' : ''}
+            </div>
+          `).join('')}
+        </div>
+      `;
+      body.appendChild(section);
+    }
+
+    // Relationships
+    if (data.relationships && data.relationships.length > 0) {
+      const relSection = document.createElement('div');
+      relSection.className = 'knowledge-section';
+      relSection.innerHTML = `
+        <div class="knowledge-category-header">
+          <span>🔗</span>
+          <span>Relacionamentos</span>
+          <span class="knowledge-count">${data.relationships.length}</span>
+        </div>
+        <div class="knowledge-entities">
+          ${data.relationships.map(r => `
+            <div class="knowledge-entity">
+              <span class="knowledge-entity-label">${escapeHtml(r.fromEntity?.label || '?')} → ${escapeHtml(r.toEntity?.label || '?')}</span>
+              <span class="knowledge-entity-value">${escapeHtml(r.type)}${r.description ? ' - ' + escapeHtml(r.description) : ''}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      body.appendChild(relSection);
+    }
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'knowledge-actions';
+    actions.innerHTML = `
+      <button class="btn btn-primary btn-sm" onclick="forceKnowledgeExtraction()" style="width:100%">Reanalisar mensagens</button>
+      <button class="btn btn-secondary btn-sm" onclick="deleteKnowledge()" style="width:100%;margin-top:6px">Limpar dados</button>
+    `;
+    body.appendChild(actions);
+
+  } catch (err) {
+    body.innerHTML = `
+      <div class="knowledge-empty">
+        <p>Erro ao carregar dados.</p>
+        <button class="btn btn-primary btn-sm" onclick="loadKnowledgePanel()">Tentar novamente</button>
+      </div>
+    `;
+  }
+}
+
+async function forceKnowledgeExtraction() {
+  const body = document.getElementById('knowledgePanelBody');
+  if (body) body.innerHTML = '<div class="spinner" style="margin-top:40px"></div><p style="text-align:center;color:#888;margin-top:8px;font-size:12px">Analisando mensagens com IA...</p>';
+
+  try {
+    const res = await api('POST', '/knowledge/extract/' + currentInstance, {
+      remoteJid: selectedGroup,
+      messageCount: 50
+    });
+
+    if (res.ok) {
+      toast('Analise concluida!', 'success');
+    } else {
+      toast('Falha na analise', 'error');
+    }
+  } catch {
+    toast('Erro na analise', 'error');
+  }
+
+  await loadKnowledgePanel();
+}
+
+async function deleteKnowledge() {
+  if (!confirm('Remover todos os dados extraidos deste contato?')) return;
+
+  try {
+    await api('DELETE', '/knowledge/contact/' + currentInstance + '?remoteJid=' + encodeURIComponent(selectedGroup));
+    toast('Dados removidos', 'success');
+    await loadKnowledgePanel();
+  } catch {
+    toast('Erro ao remover', 'error');
+  }
 }
 
 async function loadGroupInfo() {
