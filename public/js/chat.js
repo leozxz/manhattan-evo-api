@@ -443,13 +443,19 @@ function renderGroupList() {
     const groupSvg = '<svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>';
     const personSvg = '<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
 
+    let groupMembers = '';
     if (c.isGroup) {
       displayName = c.subject || c.id;
       if (c.participantNames && c.participantNames.length > 0) {
-        subtitle = c.participantNames.join(', ');
-        if (c.size > c.participantNames.length) subtitle += ', +' + (c.size - c.participantNames.length);
+        groupMembers = c.participantNames.join(', ');
+        if (c.size > c.participantNames.length) groupMembers += ', +' + (c.size - c.participantNames.length);
       } else {
-        subtitle = (c.size || '?') + ' participantes';
+        groupMembers = (c.size || '?') + ' participantes';
+      }
+      // Message preview as subtitle
+      if (c.lastMsgPreview) {
+        const prefix = c.lastMsgFromMe ? 'Voce: ' : '';
+        subtitle = prefix + c.lastMsgPreview;
       }
     } else {
       const phone = c.phone || c.id.split('@')[0];
@@ -457,12 +463,11 @@ function renderGroupList() {
       const contactName = c.pushName || contactNames[c.id] || '';
       displayName = formattedPhone;
       subtitle = contactName || '';
-    }
-
-    // Override subtitle with last message preview if available
-    if (c.lastMsgPreview) {
-      const prefix = c.lastMsgFromMe ? 'Voce: ' : '';
-      subtitle = prefix + c.lastMsgPreview;
+      // Message preview as subtitle for private chats
+      if (c.lastMsgPreview) {
+        const prefix = c.lastMsgFromMe ? 'Voce: ' : '';
+        subtitle = prefix + c.lastMsgPreview;
+      }
     }
 
     if (c.profilePicUrl) {
@@ -481,7 +486,8 @@ function renderGroupList() {
       </div>
       <div class="chat-info">
         <div class="chat-name">${escapeHtml(displayName)}</div>
-        <div class="chat-preview">${escapeHtml(subtitle)}</div>
+        ${groupMembers ? '<div class="chat-members">' + escapeHtml(groupMembers) + '</div>' : ''}
+        ${subtitle ? '<div class="chat-preview">' + escapeHtml(subtitle) + '</div>' : ''}
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
         <div style="display:flex;align-items:center;gap:2px">
