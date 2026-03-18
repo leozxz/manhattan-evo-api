@@ -77,15 +77,25 @@ async function initTables() {
 const EXTRACTION_PROMPT = `Voce e um analisador de informacoes de clientes. Analise as mensagens do chat e extraia informacoes importantes sobre o cliente.
 
 CATEGORIAS DE ENTIDADES para extrair:
-- PESSOA: nomes de familiares, amigos, colegas (label: nome, value: relacao com o contato)
-- FAMILIA: informacoes familiares (label: tipo como "estado_civil", "filhos", "conjuge", value: detalhe)
-- FINANCEIRO: renda, dividas, investimentos, profissao (label: tipo, value: detalhe)
+- PESSOA: nomes de familiares, amigos, colegas (label: nome da pessoa, value: relacao com o contato ex: "mae", "esposa", "amigo")
+- FAMILIA: informacoes familiares (label: tipo como "estado_civil", "filhos", "conjuge", value: detalhe especifico)
+- FINANCEIRO: EXTRAIA COM MAXIMO DETALHE. Cada informacao financeira deve ser uma entidade SEPARADA:
+  * patrimonio_total: valor total mencionado (ex: "R$ 143.000")
+  * investimento_[plataforma]: valor ou descricao por plataforma (label: "investimento_binance", value: "maior parte dos R$ 143k, foco em cripto")
+  * investimento_[plataforma]: (label: "investimento_btg", value: "parte restante dos investimentos")
+  * tipo_investimento: tipos mencionados (label: "cripto", value: "maior parte do patrimonio, na Binance")
+  * renda_mensal: se mencionada
+  * divida_[tipo]: dividas mencionadas com valor e contexto
+  * despesa_[tipo]: gastos recorrentes mencionados
+  * banco_[nome]: bancos/corretoras que usa
+  * perfil_investidor: conservador/moderado/arrojado (inferir do tipo de investimento)
+  * objetivo_financeiro: metas financeiras mencionadas
 - SAUDE: condicoes de saude, medicamentos, planos (label: tipo, value: detalhe)
-- MORADIA: endereco, tipo de imovel, bairro (label: tipo, value: detalhe)
-- TRABALHO: empresa, cargo, area de atuacao (label: tipo, value: detalhe)
+- MORADIA: endereco, tipo de imovel, bairro, cidade (label: tipo, value: detalhe)
+- TRABALHO: empresa, cargo, area de atuacao, salario (label: tipo, value: detalhe)
 - EDUCACAO: formacao, cursos, instituicoes (label: tipo, value: detalhe)
 - INTERESSE: hobbies, preferencias, gostos (label: tipo, value: detalhe)
-- EVENTO: datas importantes, aniversarios, compromissos (label: tipo, value: detalhe)
+- EVENTO: datas importantes, aniversarios, compromissos (label: tipo, value: detalhe com data se disponivel)
 - SENTIMENTO: humor atual, satisfacao, reclamacoes (label: tipo, value: detalhe)
 
 REGRAS:
@@ -94,6 +104,8 @@ REGRAS:
 3. Atribua um nivel de confianca (0.0 a 1.0) para cada entidade.
 4. Identifique relacionamentos entre entidades quando possivel.
 5. Gere um resumo breve do perfil atualizado do cliente.
+6. FINANCEIRO: crie uma entidade SEPARADA para cada dado financeiro. Nunca agrupe tudo em uma entidade so. Inclua valores monetarios quando mencionados. Inclua a plataforma/banco quando mencionado.
+7. Use labels descritivos e unicos (ex: "investimento_binance" em vez de apenas "investimentos").
 
 CONTEXTO EXISTENTE DO CLIENTE:
 {existingContext}
