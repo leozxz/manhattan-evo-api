@@ -189,6 +189,24 @@ async function loadGroups() {
       unread = 1; // Private chat with unseen incoming message
     }
 
+    // Extract last message preview text
+    let lastMsgPreview = '';
+    if (c.lastMessage) {
+      const lm = c.lastMessage;
+      const msg = lm.message || {};
+      lastMsgPreview = msg.conversation
+        || msg.extendedTextMessage?.text
+        || (msg.imageMessage ? '📷 Imagem' : '')
+        || (msg.videoMessage ? '🎬 Video' : '')
+        || (msg.audioMessage ? '🎵 Audio' : '')
+        || (msg.documentMessage ? '📄 Documento' : '')
+        || (msg.stickerMessage ? '🏷 Sticker' : '')
+        || (msg.locationMessage || msg.liveLocationMessage ? '📍 Localizacao' : '')
+        || (msg.contactMessage || msg.contactsArrayMessage ? '👤 Contato' : '')
+        || '';
+      if (lastMsgPreview.length > 80) lastMsgPreview = lastMsgPreview.substring(0, 80) + '...';
+    }
+
     chatMap[jid] = {
       id: jid,
       messageJid: jid, // The JID as stored in Message table (from findChats)
@@ -199,7 +217,9 @@ async function loadGroups() {
       size: gm?.size || 0,
       profilePicUrl: c.profilePicUrl || null,
       lastMessageTs: msgTs,
-      unreadCount: unread
+      unreadCount: unread,
+      lastMsgPreview: lastMsgPreview,
+      lastMsgFromMe: !!c.lastMessage?.key?.fromMe
     };
 
     // Store contact name
@@ -417,6 +437,12 @@ function renderGroupList() {
       const contactName = c.pushName || contactNames[c.id] || '';
       displayName = formattedPhone;
       subtitle = contactName || '';
+    }
+
+    // Override subtitle with last message preview if available
+    if (c.lastMsgPreview) {
+      const prefix = c.lastMsgFromMe ? 'Voce: ' : '';
+      subtitle = prefix + c.lastMsgPreview;
     }
 
     if (c.profilePicUrl) {
@@ -2747,6 +2773,14 @@ async function sendMsg() {
     const errMsg = res.data?.response?.message;
     const isConnErr = typeof errMsg === 'string' && errMsg.includes('Connection') || (Array.isArray(errMsg) && errMsg.some(e => String(e).includes('Connection')));
     toast(isConnErr ? 'Conexao instavel, tente novamente' : 'Erro ao enviar mensagem', 'error');
+  } else {
+    // Update sidebar preview for sent message
+    const chat = allChats.find(c => c.id === selectedGroup);
+    if (chat) {
+      chat.lastMsgPreview = text.length > 80 ? text.substring(0, 80) + '...' : text;
+      chat.lastMsgFromMe = true;
+      renderGroupList();
+    }
   }
 
   // Clear presence after sending
@@ -3446,6 +3480,22 @@ function startSSE() {
           }
         }
 
+        // Update last message preview
+        const inMsg = d.message || {};
+        const inPreview = inMsg.conversation
+          || inMsg.extendedTextMessage?.text
+          || (inMsg.imageMessage ? '📷 Imagem' : '')
+          || (inMsg.videoMessage ? '🎬 Video' : '')
+          || (inMsg.audioMessage ? '🎵 Audio' : '')
+          || (inMsg.documentMessage ? '📄 Documento' : '')
+          || (inMsg.stickerMessage ? '🏷 Sticker' : '')
+          || (inMsg.locationMessage || inMsg.liveLocationMessage ? '📍 Localizacao' : '')
+          || '';
+        if (inPreview) {
+          chat.lastMsgPreview = inPreview.length > 80 ? inPreview.substring(0, 80) + '...' : inPreview;
+          chat.lastMsgFromMe = false;
+        }
+
         chat.unreadCount = (chat.unreadCount || 0) + 1;
         const ts = d.messageTimestamp;
         if (ts) {
@@ -3509,6 +3559,20 @@ function startSSE() {
           groupLastMsg[chat.id] = ts;
           saveGroupTimestamps();
         }
+        // Update last message preview from sync
+        const lmSync = d.lastMessage?.message || {};
+        const syncPreview = lmSync.conversation
+          || lmSync.extendedTextMessage?.text
+          || (lmSync.imageMessage ? '📷 Imagem' : '')
+          || (lmSync.videoMessage ? '🎬 Video' : '')
+          || (lmSync.audioMessage ? '🎵 Audio' : '')
+          || (lmSync.documentMessage ? '📄 Documento' : '')
+          || '';
+        if (syncPreview) {
+          chat.lastMsgPreview = syncPreview.length > 80 ? syncPreview.substring(0, 80) + '...' : syncPreview;
+          chat.lastMsgFromMe = !!d.lastMessage?.key?.fromMe;
+        }
+
         if (d.pushName) contactNames[chat.id] = d.pushName;
         if (!chat.messageJid || chat.messageJid.endsWith('@lid')) chat.messageJid = jid;
         renderGroupList();
