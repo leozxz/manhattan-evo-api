@@ -127,9 +127,20 @@ async function loadGroups() {
       if (Array.isArray(g.participants)) {
         g._participantNames = g.participants
           .map(p => {
-            const jid = typeof p === 'string' ? p : (p.id || '');
-            const phone = jid.split('@')[0];
-            return contactNames[jid] || p.pushName || p.name || p.notify || (isRealPhone(phone) ? formatPhone(phone) : phone);
+            if (typeof p === 'string') {
+              const phone = p.split('@')[0];
+              return contactNames[p] || (isRealPhone(phone) ? formatPhone(phone) : '');
+            }
+            const jid = p.id || '';
+            const phoneJid = p.phoneNumber ? String(p.phoneNumber) : '';
+            const phone = phoneJid ? phoneJid.split('@')[0] : jid.split('@')[0];
+            // Cache LID -> phone mapping
+            if (jid.endsWith('@lid') && phoneJid) lidToPhone[jid] = phoneJid;
+            // Cache contact name
+            const name = p.pushName || p.name || p.notify || p.verifiedName || '';
+            if (name && !contactNames[jid]) contactNames[jid] = name;
+            if (name && phoneJid && !contactNames[phoneJid]) contactNames[phoneJid] = name;
+            return name || contactNames[jid] || contactNames[phoneJid] || (isRealPhone(phone) ? formatPhone(phone) : '');
           })
           .filter(Boolean)
           .slice(0, 5);
