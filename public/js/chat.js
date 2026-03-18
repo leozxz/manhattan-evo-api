@@ -736,7 +736,7 @@ async function selectGroup(chat, el) {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="#54656f"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
           </button>
           <button class="ai-suggest-btn" id="aiSuggestBtn" onclick="requestAiSuggestion()" title="Sugestao IA">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="#54656f"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2zm8 6l-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3zm-4 8l-1.5 4.5L8 22l-1.5-1.5L2 19l4.5-1.5L8 13l1.5 4.5z"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#54656f"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2zm8 6l-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3zm-4 8l-1.5 4.5L8 22l-1.5-1.5L2 19l4.5-1.5L8 13l1.5 4.5z"/></svg>
           </button>
           <input type="text" id="msgInput" placeholder="Digite uma mensagem... (@mencionar)" onkeydown="handleMsgKeydown(event)" oninput="handleMentionInput(this)">
           <div class="recording-bar" id="recordingBar" style="display:none">
@@ -2151,8 +2151,6 @@ function previewImage(src) {
 
 async function fetchAndRenderMessages() {
   if (!selectedGroup || !currentInstance) return;
-  // Skip re-render while AI is thinking so the "pensando..." bubble stays visible
-  if (aiSuggestLoading) return;
 
   // Determine which JIDs to query for messages
   const messageJid = selectedGroupData?.messageJid || selectedGroup;
@@ -2965,14 +2963,6 @@ async function requestAiSuggestion() {
   btn.classList.add('loading');
   btn.innerHTML = '<div class="ai-spinner"></div>';
 
-  // Show "pensando..." in chat
-  const thinkingEl = document.createElement('div');
-  thinkingEl.className = 'ai-thinking-wrapper';
-  thinkingEl.id = 'aiThinking';
-  thinkingEl.innerHTML = '<span class="ai-thinking-bubble">pensando...</span>';
-  container.appendChild(thinkingEl);
-  container.scrollTop = container.scrollHeight;
-
   try {
     const res = await fetch('/ai/suggest', {
       method: 'POST',
@@ -2990,13 +2980,9 @@ async function requestAiSuggestion() {
   } catch (err) {
     toast('Erro ao conectar com IA: ' + err.message, 'error');
   } finally {
-    const t = document.getElementById('aiThinking');
-    if (t) t.remove();
     aiSuggestLoading = false;
     btn.classList.remove('loading');
-    btn.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="#54656f"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2zm8 6l-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3zm-4 8l-1.5 4.5L8 22l-1.5-1.5L2 19l4.5-1.5L8 13l1.5 4.5z"/></svg>';
-    lastMsgCount = 0;
-    fetchAndRenderMessages();
+    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#54656f"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2zm8 6l-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3zm-4 8l-1.5 4.5L8 22l-1.5-1.5L2 19l4.5-1.5L8 13l1.5 4.5z"/></svg>';
   }
 }
 
