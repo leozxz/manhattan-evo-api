@@ -256,80 +256,35 @@ async function saveExtraction(db, instanceId, remoteJid, pushName, extraction) {
   return contactId;
 }
 
-// Resolve a remoteJid to all possible JID variants (LID, phone, etc.)
-async function resolveJidVariants(instanceName, remoteJid) {
-  const variants = [remoteJid];
-
-  // If it's a LID, try to resolve to phone JID
-  if (remoteJid.includes('@lid')) {
-    try {
-      const res = await evoRequest('POST', '/chat/whatsappNumbers/' + instanceName, {
-        numbers: [remoteJid],
-      });
-      if (Array.isArray(res)) {
-        for (const entry of res) {
-          if (entry.jid && !variants.includes(entry.jid)) variants.push(entry.jid);
-          // Also try the number@s.whatsapp.net format
-          if (entry.jid) {
-            const num = entry.jid.split('@')[0];
-            const phoneJid = num + '@s.whatsapp.net';
-            if (!variants.includes(phoneJid)) variants.push(phoneJid);
-          }
-        }
-      }
-    } catch {}
-  }
-
-  // If it's a phone JID, also check for LID variant in IsOnWhatsapp table
-  if (remoteJid.includes('@s.whatsapp.net')) {
-    const num = remoteJid.split('@')[0];
-    const lidJid = num + '@lid';
-    if (!variants.includes(lidJid)) variants.push(lidJid);
-  }
-
-  // Also try without the @suffix as a number
-  const rawNum = remoteJid.split('@')[0];
-  if (rawNum && !variants.includes(rawNum)) variants.push(rawNum);
-
-  return variants;
-}
-
 async function extractFromMessages(instanceId, instanceName, remoteJid, messageCount) {
   const db = getPool();
   const limit = messageCount || 50;
 
-  // Try multiple JID variants to find messages
-  const jidVariants = await resolveJidVariants(instanceName, remoteJid);
-  console.log('[Knowledge] Trying JID variants:', jidVariants);
+  // Query messages directly from PostgreSQL — handles LID and phone JIDs
+  // The key column is JSONB, so we search key->>'remoteJid' with multiple variants
+  const rawNum = remoteJid.split('@')[0];
+  const jidVariants = [remoteJid];
+  if (remoteJid.includes('@lid')) jidVariants.push(rawNum + '@s.whatsapp.net');
+  if (remoteJid.includes('@s.whatsapp.net')) jidVariants.push(rawNum + '@lid');
 
-  let allMessages = [];
-  const seenIds = new Set();
+  console.log('[Knowledge] Querying DB for JID variants:', jidVariants);
 
-  for (const jid of jidVariants) {
-    try {
-      const msgs = await evoRequest('POST', '/chat/findMessages/' + instanceName, {
-        where: { key: { remoteJid: jid } },
-        limit,
-      });
-      if (Array.isArray(msgs)) {
-        for (const m of msgs) {
-          const mid = m.key?.id || m.id;
-          if (mid && !seenIds.has(mid)) {
-            seenIds.add(mid);
-            allMessages.push(m);
-          }
-        }
-      }
-    } catch {}
+  const result = await db.query(`
+    SELECT key, message, "pushName", "messageTimestamp"
+    FROM "Message"
+    WHERE "instanceId" = $1
+      AND key->>'remoteJid' = ANY($2)
+    ORDER BY "messageTimestamp" DESC
+    LIMIT $3
+  `, [instanceId, jidVariants, limit]);
+
+  console.log('[Knowledge] Found', result.rows.length, 'messages in DB');
+
+  if (result.rows.length === 0) {
+    throw new Error('No messages found for ' + remoteJid + ' (DB query, variants: ' + jidVariants.join(', ') + ')');
   }
 
-  console.log('[Knowledge] Found', allMessages.length, 'messages across', jidVariants.length, 'JID variants');
-
-  if (allMessages.length === 0) {
-    throw new Error('No messages found for ' + remoteJid + ' (tried variants: ' + jidVariants.join(', ') + ')');
-  }
-
-  const messages = allMessages;
+  const messages = result.rows;
 
   // Extract text from messages
   const texts = messages
