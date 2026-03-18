@@ -786,19 +786,40 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 
 /* AI Suggest button */
 .ai-suggest-btn {
-  border-radius: 50%; width: 40px; height: 40px; padding: 0; flex-shrink: 0;
+  border-radius: 50%; width: 36px; height: 36px; padding: 0; flex-shrink: 0;
   border: none; background: none; cursor: pointer; display: flex;
   align-items: center; justify-content: center; transition: all 0.2s;
-  position: relative;
+  position: relative; overflow: hidden;
 }
-.ai-suggest-btn:hover { background: linear-gradient(135deg, rgba(139,92,246,0.1), rgba(59,130,246,0.1)); }
+.ai-suggest-btn svg { width: 17px; height: 17px; }
+.ai-suggest-btn::before {
+  content: ''; position: absolute; inset: 0; border-radius: 50%; opacity: 0;
+  background: linear-gradient(135deg, rgba(139,92,246,0.18), rgba(59,130,246,0.15), rgba(251,146,60,0.13));
+  background-size: 200% 200%; transition: opacity 0.25s;
+}
+.ai-suggest-btn:hover::before {
+  opacity: 1; animation: aiWave 2.5s ease-in-out infinite;
+}
 .ai-suggest-btn:hover svg { fill: #8b5cf6; }
-.ai-suggest-btn.loading { background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.15)); pointer-events: none; }
+@keyframes aiWave {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.ai-suggest-btn.loading { pointer-events: none; }
+.ai-suggest-btn.loading::before { opacity: 1; animation: aiWave 1.5s ease-in-out infinite; }
 .ai-spinner {
-  width: 18px; height: 18px; border: 2px solid rgba(139,92,246,0.2);
+  width: 16px; height: 16px; border: 2px solid rgba(139,92,246,0.2);
   border-top-color: #8b5cf6; border-radius: 50%; animation: aiSpin 0.7s linear infinite;
 }
 @keyframes aiSpin { to { transform: rotate(360deg); } }
+/* AI thinking bubble */
+.ai-thinking-wrapper { display: flex; justify-content: center; padding: 6px 0; }
+.ai-thinking-bubble {
+  font-size: 13px; color: #b0b8c1; font-style: italic;
+  animation: aiPulse 1.6s ease-in-out infinite;
+}
+@keyframes aiPulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
 
 /* Audio Recording */
 .record-btn {
