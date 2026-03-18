@@ -843,6 +843,7 @@ async function loadKnowledgePanel() {
 
   try {
     const res = await api('GET', '/knowledge/contact/' + currentInstance + '?remoteJid=' + encodeURIComponent(selectedGroup));
+    console.log('[Knowledge] GET contact response:', res.status, JSON.stringify(res.data));
 
     if (!res.ok || !res.data) {
       body.innerHTML = `
@@ -950,13 +951,17 @@ async function forceKnowledgeExtraction() {
       messageCount: 50
     });
 
+    console.log('[Knowledge] Extract response:', res.status, JSON.stringify(res.data));
+
     if (res.ok) {
       toast('Analise concluida!', 'success');
     } else {
-      toast('Falha na analise', 'error');
+      console.error('[Knowledge] Extract failed:', res.status, res.data);
+      toast('Falha na analise (HTTP ' + res.status + '): ' + (res.data?.error || res.data?.message || JSON.stringify(res.data)), 'error');
     }
-  } catch {
-    toast('Erro na analise', 'error');
+  } catch (err) {
+    console.error('[Knowledge] Extract error:', err);
+    toast('Erro na analise: ' + err.message, 'error');
   }
 
   await loadKnowledgePanel();
