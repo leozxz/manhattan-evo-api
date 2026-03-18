@@ -731,13 +731,12 @@ async function selectGroup(chat, el) {
               Localizacao
             </button>
           </div>
-          <div class="audio-panel" id="audioPanel"></div>
           <input type="file" id="mediaFileInput" style="display:none" onchange="handleMediaFile(this)">
           <button class="btn btn-secondary" onclick="toggleAttachMenu()" style="border-radius:50%;width:40px;height:40px;padding:0;flex-shrink:0" title="Anexar arquivo">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="#54656f"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
           </button>
-          <button class="btn btn-secondary" onclick="toggleAudioPanel()" style="border-radius:50%;width:40px;height:40px;padding:0;flex-shrink:0" title="Audios salvos">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#54656f"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-6 11c-1.66 0-3-1.34-3-3V5c0-1.66 1.34-3 3-3s3 1.34 3 3v5c0 1.66-1.34 3-3 3zm4.3-3c0 2.5-2.12 4.26-4.3 4.26S9.7 12.5 9.7 10H8.4c0 2.86 2.28 5.21 5.1 5.63V19h1v-3.37c2.82-.42 5.1-2.77 5.1-5.63H18.3z"/></svg>
+          <button class="ai-suggest-btn" id="aiSuggestBtn" onclick="requestAiSuggestion()" title="Sugestao IA">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#54656f"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2zm8 6l-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3zm-4 8l-1.5 4.5L8 22l-1.5-1.5L2 19l4.5-1.5L8 13l1.5 4.5z"/></svg>
           </button>
           <input type="text" id="msgInput" placeholder="Digite uma mensagem... (@mencionar)" onkeydown="handleMsgKeydown(event)" oninput="handleMentionInput(this)">
           <div class="recording-bar" id="recordingBar" style="display:none">
@@ -2903,100 +2902,87 @@ async function sendLocation() {
 }
 
 // =====================
-// QUICK AUDIOS
+// AI SUGGESTION
 // =====================
-let audioList = [];
-let previewAudio = null;
+let aiSuggestLoading = false;
 
-async function loadAudioList() {
-  try {
-    const res = await fetch('audios/list.json');
-    audioList = await res.json();
-  } catch { audioList = []; }
-}
-loadAudioList();
+async function requestAiSuggestion() {
+  if (!ensureConnected()) return;
+  if (!selectedGroup) return toast('Selecione uma conversa primeiro', 'error');
+  if (aiSuggestLoading) return;
 
-function toggleAudioPanel() {
-  const panel = document.getElementById('audioPanel');
-  if (!panel) return;
-  // Close attach menu if open
-  const menu = document.getElementById('attachMenu');
-  if (menu) menu.classList.remove('show');
+  const btn = document.getElementById('aiSuggestBtn');
+  const input = document.getElementById('msgInput');
 
-  panel.classList.toggle('show');
-  if (panel.classList.contains('show')) renderAudioPanel();
-}
+  // Collect last 15 messages from the currently rendered chat
+  const container = document.getElementById('msgContainer');
+  if (!container) return;
 
-function renderAudioPanel() {
-  const panel = document.getElementById('audioPanel');
-  if (!panel) return;
+  // Re-fetch messages to get structured data
+  const jidsToTry = [selectedGroup];
+  if (selectedGroupData?.phone) {
+    const phone = selectedGroupData.phone;
+    jidsToTry.push(phone + '@s.whatsapp.net');
+    if (phone.startsWith('55') && phone.length === 13)
+      jidsToTry.push(phone.slice(0, 4) + phone.slice(5) + '@s.whatsapp.net');
+    else if (phone.startsWith('55') && phone.length === 12)
+      jidsToTry.push(phone.slice(0, 4) + '9' + phone.slice(4) + '@s.whatsapp.net');
+  }
+  if (selectedGroupData?.messageJid && !jidsToTry.includes(selectedGroupData.messageJid))
+    jidsToTry.push(selectedGroupData.messageJid);
 
-  if (audioList.length === 0) {
-    panel.innerHTML = '<div class="audio-empty">Nenhum audio encontrado.<br><span style="font-size:11px">Coloque arquivos em <b>audios/</b> e atualize <b>list.json</b></span></div>';
-    return;
+  const dedupIds = new Set();
+  let allMsgs = [];
+  for (const jid of jidsToTry) {
+    const r = await api('POST', '/chat/findMessages/' + currentInstance, {
+      where: { key: { remoteJid: jid } }, offset: 100, page: 1
+    });
+    const msgs = extractMessages(r.ok ? r.data : null);
+    msgs.forEach(m => {
+      const mid = m.key?.id || m.id;
+      if (mid && !dedupIds.has(mid)) { dedupIds.add(mid); allMsgs.push(m); }
+    });
   }
 
-  let html = '<div class="audio-panel-title">Audios rapidos</div>';
-  audioList.forEach((a, i) => {
-    html += '<div class="audio-item">' +
-      '<button class="audio-item-play" onclick="event.stopPropagation();previewQuickAudio(' + i + ')" title="Ouvir">' +
-        '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>' +
-      '</button>' +
-      '<span class="audio-item-name" onclick="sendQuickAudio(' + i + ')">' + escapeHtml(a.name) + '</span>' +
-      '<svg viewBox="0 0 24 24" onclick="sendQuickAudio(' + i + ')" style="cursor:pointer" title="Enviar"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>' +
-    '</div>';
+  // Sort by timestamp and get last 15 text messages
+  allMsgs.sort((a, b) => {
+    const ta = typeof a.messageTimestamp === 'string' ? parseInt(a.messageTimestamp) : (a.messageTimestamp || 0);
+    const tb = typeof b.messageTimestamp === 'string' ? parseInt(b.messageTimestamp) : (b.messageTimestamp || 0);
+    return ta - tb;
   });
-  panel.innerHTML = html;
-}
 
-function previewQuickAudio(index) {
-  const a = audioList[index];
-  if (!a) return;
-  if (previewAudio) { previewAudio.pause(); previewAudio = null; }
-  previewAudio = new Audio('audios/' + a.file);
-  previewAudio.play().catch(() => toast('Erro ao reproduzir audio', 'error'));
-}
+  const textMsgs = allMsgs
+    .map(m => ({ text: getMessageText(m), fromMe: !!m.key?.fromMe }))
+    .filter(m => m.text && m.text.trim());
 
-async function sendQuickAudio(index) {
-  if (!ensureConnected()) return;
-  const a = audioList[index];
-  if (!a || !selectedGroup) return;
+  const last15 = textMsgs.slice(-15);
+  if (last15.length === 0) return toast('Nenhuma mensagem de texto encontrada', 'error');
 
-  // Close panel
-  const panel = document.getElementById('audioPanel');
-  if (panel) panel.classList.remove('show');
-  if (previewAudio) { previewAudio.pause(); previewAudio = null; }
-
-  toast('Enviando audio "' + a.name + '"...');
+  // Show loading state
+  aiSuggestLoading = true;
+  btn.classList.add('loading');
+  btn.innerHTML = '<div class="ai-spinner"></div>';
 
   try {
-    // Fetch the audio file and convert to base64
-    const res = await fetch('audios/' + a.file);
-    const blob = await res.blob();
-    if (blob.size > MAX_MEDIA_SIZE) return toast('Audio muito grande (max 16MB)', 'error');
-    const base64 = await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.readAsDataURL(blob);
+    const res = await fetch('/ai/suggest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: last15 }),
     });
-
-    const sendRes = await api('POST', '/message/sendMedia/' + currentInstance, {
-      number: await getSendNumber(),
-      mediatype: 'audio',
-      media: base64,
-      mimetype: blob.type || 'audio/mpeg',
-      fileName: a.file
-    });
-
-    if (sendRes.ok && sendRes.data && sendRes.data.key) {
-      toast('Audio "' + a.name + '" enviado!');
-      lastMsgCount = 0;
-      fetchAndRenderMessages();
+    const data = await res.json();
+    if (res.ok && data.suggestion) {
+      input.value = data.suggestion;
+      input.focus();
+      toast('Sugestao gerada pela IA');
     } else {
-      toast('Erro ao enviar audio', 'error');
+      toast(data.error || 'Erro ao gerar sugestao', 'error');
     }
   } catch (err) {
-    toast('Erro ao carregar audio: ' + err.message, 'error');
+    toast('Erro ao conectar com IA: ' + err.message, 'error');
+  } finally {
+    aiSuggestLoading = false;
+    btn.classList.remove('loading');
+    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#54656f"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2zm8 6l-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3zm-4 8l-1.5 4.5L8 22l-1.5-1.5L2 19l4.5-1.5L8 13l1.5 4.5z"/></svg>';
   }
 }
 
@@ -3138,10 +3124,6 @@ document.addEventListener('click', (e) => {
   const menu = document.getElementById('attachMenu');
   if (menu && !e.target.closest('.attach-menu') && !e.target.closest('[onclick="toggleAttachMenu()"]')) {
     menu.classList.remove('show');
-  }
-  const panel = document.getElementById('audioPanel');
-  if (panel && !e.target.closest('.audio-panel') && !e.target.closest('[onclick="toggleAudioPanel()"]')) {
-    panel.classList.remove('show');
   }
 });
 

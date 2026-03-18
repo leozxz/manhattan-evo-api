@@ -784,35 +784,21 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 .modal-box h3 { font-size: 16px; font-weight: 700; margin-bottom: 20px; }
 .modal-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
 
-/* Audio quick panel */
-.audio-panel {
-  position: absolute; bottom: 56px; left: 56px;
-  background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow-lg);
-  padding: 6px 0; display: none; z-index: 10; min-width: 220px; max-height: 260px;
-  overflow-y: auto; border: 1px solid var(--border-light);
+/* AI Suggest button */
+.ai-suggest-btn {
+  border-radius: 50%; width: 40px; height: 40px; padding: 0; flex-shrink: 0;
+  border: none; background: none; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; transition: all 0.2s;
+  position: relative;
 }
-.audio-panel.show { display: block; }
-.audio-panel-title {
-  padding: 10px 16px 6px; font-size: 11px; font-weight: 700; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: 0.5px;
+.ai-suggest-btn:hover { background: linear-gradient(135deg, rgba(139,92,246,0.1), rgba(59,130,246,0.1)); }
+.ai-suggest-btn:hover svg { fill: #8b5cf6; }
+.ai-suggest-btn.loading { background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.15)); pointer-events: none; }
+.ai-spinner {
+  width: 18px; height: 18px; border: 2px solid rgba(139,92,246,0.2);
+  border-top-color: #8b5cf6; border-radius: 50%; animation: aiSpin 0.7s linear infinite;
 }
-.audio-item {
-  display: flex; align-items: center; gap: 10px; padding: 10px 16px;
-  cursor: pointer; font-size: 13px; color: var(--text); transition: background 0.15s;
-  border: none; background: none; width: 100%; text-align: left;
-}
-.audio-item:hover { background: var(--accent-light); }
-.audio-item svg { width: 18px; height: 18px; flex-shrink: 0; fill: var(--accent); }
-.audio-item-name { flex: 1; }
-.audio-item-play {
-  width: 28px; height: 28px; border-radius: 50%; border: none;
-  background: var(--panel-alt); cursor: pointer; display: flex;
-  align-items: center; justify-content: center; flex-shrink: 0;
-  transition: background 0.15s;
-}
-.audio-item-play:hover { background: var(--border); }
-.audio-item-play svg { width: 14px; height: 14px; fill: var(--text-secondary); }
-.audio-empty { padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px; }
+@keyframes aiSpin { to { transform: rotate(360deg); } }
 
 /* Audio Recording */
 .record-btn {
@@ -840,17 +826,6 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
   font-size: 12px; padding: 4px 8px; border-radius: 6px; margin-left: auto;
 }
 .recording-cancel:hover { background: var(--border-light); color: var(--text); }
-.audio-panel-tabs {
-  display: flex; border-bottom: 1px solid var(--border-light); margin-bottom: 4px;
-}
-.audio-panel-tab {
-  flex: 1; padding: 8px 12px; font-size: 12px; font-weight: 600;
-  text-align: center; cursor: pointer; border: none; background: none;
-  color: var(--text-muted); border-bottom: 2px solid transparent;
-  transition: all 0.15s;
-}
-.audio-panel-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.audio-panel-tab:hover { background: var(--accent-light); }
 
 /* Reactions */
 .msg-wrapper {
