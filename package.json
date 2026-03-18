@@ -19,7 +19,9 @@
   "engines": {
     "node": ">=16.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "pg": "^8.20.0"
+  },
   "devDependencies": {
     "eslint": "^9.0.0"
   },

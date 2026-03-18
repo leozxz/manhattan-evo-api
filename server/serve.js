@@ -3,6 +3,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const knowledge = require('./knowledge');
 
 // Load .env file if present (simple parser, no dependencies)
 const ROOT = path.join(__dirname, '..');
@@ -343,8 +344,18 @@ http.createServer((req, res) => {
     return;
   }
 
+  // Knowledge graph routes — handled locally (not proxied)
+  if (urlPath.startsWith('/knowledge/')) {
+    if (isRateLimited(ip)) {
+      res.writeHead(429, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: 'Too many requests' }));
+      return;
+    }
+    return knowledge.handleRequest(req, res, urlPath, fullApiPath);
+  }
+
   // Proxy API routes to Evolution API (server-side, key never exposed)
-  const apiPrefixes = ['/instance/', '/message/', '/chat/', '/group/', '/webhook/', '/knowledge/'];
+  const apiPrefixes = ['/instance/', '/message/', '/chat/', '/group/', '/webhook/'];
   if (apiPrefixes.some(p => urlPath.startsWith(p))) {
     if (isRateLimited(ip)) {
       res.writeHead(429, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
@@ -400,4 +411,5 @@ http.createServer((req, res) => {
   console.log('Serving Manhattan on http://localhost:' + PORT);
   if (PANEL_PASS) console.log('Auth enabled (user: ' + PANEL_USER + ')');
   else console.log('WARNING: No PANEL_PASS set, auth disabled. Set PANEL_PASS in .env for production.');
+  knowledge.init().catch(err => console.error('[Knowledge] Init error:', err.message));
 });
