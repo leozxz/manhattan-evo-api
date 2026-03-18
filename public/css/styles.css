@@ -789,13 +789,13 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
   border-radius: 50%; width: 40px; height: 40px; padding: 0; flex-shrink: 0;
   border: none; background: none; cursor: pointer; display: flex;
   align-items: center; justify-content: center; transition: all 0.2s;
-  position: relative; overflow: visible;
+  position: relative; overflow: hidden;
 }
-.ai-suggest-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+.ai-suggest-btn svg { width: 20px; height: 20px; flex-shrink: 0; position: relative; z-index: 1; }
 .ai-suggest-btn::before {
   content: ''; position: absolute; inset: 0; border-radius: 50%; opacity: 0;
   background: linear-gradient(135deg, rgba(139,92,246,0.18), rgba(59,130,246,0.15), rgba(251,146,60,0.13));
-  background-size: 200% 200%; transition: opacity 0.25s; z-index: -1;
+  background-size: 200% 200%; transition: opacity 0.25s; z-index: 0;
 }
 .ai-suggest-btn:hover::before {
   opacity: 1; animation: aiWave 2.5s ease-in-out infinite;
