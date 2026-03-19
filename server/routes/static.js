@@ -1,10 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 
-// Serve React build if available, fallback to legacy public/
+// Serve legacy public/ by default. Set USE_REACT_FRONTEND=true to use frontend/dist/
 const reactDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 const legacyPublic = path.join(__dirname, '..', '..', 'public');
-const isReact = fs.existsSync(path.join(reactDist, 'index.html'));
+const isReact = process.env.USE_REACT_FRONTEND === 'true' && fs.existsSync(path.join(reactDist, 'index.html'));
 const DIR = isReact ? reactDist : legacyPublic;
 
 // Legacy whitelist (only for vanilla JS frontend)
