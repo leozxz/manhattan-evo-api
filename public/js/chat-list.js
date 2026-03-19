@@ -185,6 +185,20 @@ async function loadGroups() {
   groups = allChats.filter(c => c.isGroup);
   rebuildPhoneIndex();
 
+  // Load saved contact names from DB
+  try {
+    const savedRes = await api('GET', '/knowledge/saved-contacts/' + currentInstance);
+    if (savedRes.ok && Array.isArray(savedRes.data)) {
+      savedRes.data.forEach(c => {
+        if (c.savedName) {
+          contactNames[c.remoteJid] = c.savedName;
+          const chat = allChats.find(ch => ch.id === c.remoteJid);
+          if (chat) chat.pushName = c.savedName;
+        }
+      });
+    }
+  } catch {}
+
   if (allChats.length === 0) {
     list.innerHTML = '<div class="no-groups"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg><p>' + (chatsRes.ok ? 'Nenhuma conversa encontrada' : 'Erro ao carregar conversas') + '</p></div>';
     return;

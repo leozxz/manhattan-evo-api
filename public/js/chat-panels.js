@@ -409,6 +409,12 @@ async function saveContact() {
   if (modal) modal.remove();
 
   toast('Contato salvo: ' + fullName);
+
+  // Persist to database
+  api('PUT', '/knowledge/contact-name/' + currentInstance, {
+    remoteJid: selectedGroup,
+    name: fullName
+  }).catch(() => {});
 }
 
 // =====================

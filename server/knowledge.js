@@ -41,6 +41,12 @@ async function initTables() {
       UNIQUE("remoteJid", "instanceId")
     );
 
+    -- Add savedName column if not exists
+    DO $$ BEGIN
+      ALTER TABLE "ContactKnowledge" ADD COLUMN IF NOT EXISTS "savedName" VARCHAR(200);
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
+
     CREATE TABLE IF NOT EXISTS "KnowledgeEntity" (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       "contactKnowledgeId" TEXT NOT NULL REFERENCES "ContactKnowledge"(id) ON DELETE CASCADE,
@@ -612,6 +618,29 @@ async function deleteTask(taskId) {
 }
 
 // =====================
+// CONTACT NAME — persist saved names
+// =====================
+async function saveContactName(instanceId, remoteJid, savedName) {
+  const db = getPool();
+  await db.query(`
+    INSERT INTO "ContactKnowledge" ("remoteJid", "instanceId", "savedName", "updatedAt")
+    VALUES ($1, $2, $3, NOW())
+    ON CONFLICT ("remoteJid", "instanceId")
+    DO UPDATE SET "savedName" = $3, "updatedAt" = NOW()
+  `, [remoteJid, instanceId, savedName]);
+  return { ok: true, savedName };
+}
+
+async function getSavedContacts(instanceId) {
+  const db = getPool();
+  const result = await db.query(
+    'SELECT "remoteJid", "savedName", "pushName" FROM "ContactKnowledge" WHERE "instanceId" = $1 AND "savedName" IS NOT NULL AND "savedName" != \'\'',
+    [instanceId]
+  );
+  return result.rows;
+}
+
+// =====================
 // RESOLVE INSTANCE ID (from Evolution API)
 // =====================
 async function resolveInstanceId(instanceName) {
@@ -746,6 +775,20 @@ async function handleRequest(req, res, urlPath, fullApiPath) {
       if (!query.taskId) return json(400, { error: 'taskId query param required' });
       const result = await deleteTask(query.taskId);
       return json(200, result);
+    }
+
+    // PUT /knowledge/contact-name/:instanceName  body: { remoteJid, name }
+    if (req.method === 'PUT' && action === 'contact-name') {
+      const body = await readBody(req);
+      if (!body.remoteJid || !body.name) return json(400, { error: 'remoteJid and name required' });
+      const result = await saveContactName(instanceId, body.remoteJid, body.name);
+      return json(200, result);
+    }
+
+    // GET /knowledge/saved-contacts/:instanceName
+    if (req.method === 'GET' && action === 'saved-contacts') {
+      const contacts = await getSavedContacts(instanceId);
+      return json(200, contacts);
     }
 
     return json(404, { error: 'Unknown knowledge route: ' + action });

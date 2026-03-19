@@ -36,7 +36,8 @@ async function selectGroup(chat, el) {
   } else {
     const phone = chat.phone || chat.id.split('@')[0];
     const formattedPhone = /^\d{10,15}$/.test(phone) ? formatPhone(phone) : phone;
-    displayName = formattedPhone;
+    const savedName = contactNames[chat.id] || chat.pushName || '';
+    displayName = savedName || formattedPhone;
   }
   if (chat.profilePicUrl) {
     avatarHtml = '<img src="' + escapeHtml(chat.profilePicUrl) + '" class="chat-avatar-img" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
@@ -156,8 +157,14 @@ async function selectGroup(chat, el) {
       subtitleEl.textContent = (chat.size || '') + (chat.size ? ' participantes' : '');
     }
   } else if (subtitleEl && !isGroup) {
-    const contactName = chat.pushName || contactNames[chat.id] || '';
-    if (contactName) subtitleEl.textContent = contactName;
+    const savedName = contactNames[chat.id] || chat.pushName || '';
+    const phone = chat.phone || chat.id.split('@')[0];
+    if (savedName) {
+      // Name is title, phone is subtitle
+      subtitleEl.textContent = /^\d{10,15}$/.test(phone) ? formatPhone(phone) : phone;
+    } else {
+      subtitleEl.textContent = '';
+    }
   }
 
   await fetchAndRenderMessages();
