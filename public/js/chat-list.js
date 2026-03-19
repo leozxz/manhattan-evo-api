@@ -370,9 +370,9 @@ function renderGroupList() {
     } else {
       const phone = c.phone || c.id.split('@')[0];
       const formattedPhone = /^\d{10,15}$/.test(phone) ? formatPhone(phone) : phone;
-      const contactName = c.pushName || contactNames[c.id] || '';
-      displayName = formattedPhone;
-      subtitle = contactName || '';
+      const savedName = contactNames[c.id] || c.pushName || '';
+      displayName = savedName || formattedPhone;
+      subtitle = savedName ? formattedPhone : '';
     }
 
     if (c.lastMsgPreview) {
