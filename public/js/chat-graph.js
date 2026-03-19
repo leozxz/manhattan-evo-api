@@ -235,8 +235,11 @@ function renderGraph(canvas, data, contactName) {
       ctx.strokeStyle = '#8b5cf680'; ctx.lineWidth = 2 * cam.zoom; ctx.stroke();
     }
 
-    ctx.shadowColor = 'rgba(0,0,0,' + (n.type === 'contact' ? '0.2' : '0.08') + ')';
-    ctx.shadowBlur = (n.type === 'contact' ? 12 : 6) * cam.zoom; ctx.shadowOffsetY = 2 * cam.zoom;
+    const dimmed = op < 0.5; // node is filtered out
+    ctx.shadowColor = dimmed ? 'transparent' : 'rgba(0,0,0,' + (n.type === 'contact' ? '0.2' : '0.08') + ')';
+    ctx.shadowBlur = dimmed ? 0 : (n.type === 'contact' ? 12 : 6) * cam.zoom;
+    ctx.shadowOffsetY = dimmed ? 0 : 2 * cam.zoom;
+    ctx.globalAlpha = dimmed ? 0.15 : 1;
     ctx.beginPath(); ctx.arc(s.x, s.y, sr, 0, 2 * Math.PI);
 
     if (n.type === 'contact') {
@@ -244,18 +247,18 @@ function renderGraph(canvas, data, contactName) {
       grad.addColorStop(0, '#1a1d23'); grad.addColorStop(1, '#2d3139');
       ctx.fillStyle = grad; ctx.fill();
     } else if (n.type === 'category') {
-      const grad = ctx.createLinearGradient(s.x - sr, s.y - sr, s.x + sr, s.y + sr);
-      grad.addColorStop(0, n.color); grad.addColorStop(1, n.color + 'cc');
-      ctx.fillStyle = grad; ctx.fill();
+      ctx.fillStyle = dimmed ? '#d1d5db' : n.color;
+      ctx.fill();
     } else {
-      ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.fillStyle = dimmed ? '#f3f4f6' : '#fff'; ctx.fill();
       ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-      ctx.strokeStyle = isAiMatch ? '#8b5cf6' : n.color; ctx.lineWidth = (isAiMatch ? 3 : 2) * cam.zoom; ctx.stroke();
+      ctx.strokeStyle = dimmed ? '#d1d5db' : (isAiMatch ? '#8b5cf6' : n.color);
+      ctx.lineWidth = (isAiMatch ? 3 : 2) * cam.zoom; ctx.stroke();
     }
     ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
 
     if (n.type !== 'entity') {
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = dimmed ? '#9ca3af' : '#fff';
       ctx.font = '600 ' + (n.type === 'contact' ? 13 : 10) * cam.zoom + 'px -apple-system,sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const maxC = Math.floor(n.r * 2 / (n.type === 'contact' ? 8 : 6));
@@ -263,7 +266,7 @@ function renderGraph(canvas, data, contactName) {
     }
 
     if (n.type === 'entity' && cam.zoom > 0.4) {
-      ctx.fillStyle = op > 0.5 ? '#333' : '#33333320';
+      ctx.fillStyle = dimmed ? '#ccc' : '#333';
       ctx.font = (10 * cam.zoom) + 'px -apple-system,sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       const maxW = 110 * cam.zoom, words = n.label.split(' ');
@@ -409,12 +412,7 @@ function renderGraph(canvas, data, contactName) {
             aiStatus.style.color = '#10b981';
           } else {
             aiStatus.style.color = '#f59e0b';
-            if (suggestedMessage) {
-              aiStatus.innerHTML = (answer ? escapeHtml(answer) + '<br>' : '') +
-                '<span style="color:#8b5cf6;cursor:pointer;text-decoration:underline" onclick="copyAiSuggestion(this)" data-msg="' + escapeHtml(suggestedMessage) + '">📋 Copiar sugestao de mensagem</span>';
-            } else {
-              aiStatus.textContent = answer || 'Informacao nao encontrada.';
-            }
+            aiStatus.textContent = answer || 'Informacao nao encontrada no perfil.';
           }
         } else {
           aiStatus.textContent = 'Erro na consulta.'; aiStatus.style.color = '#ef4444';
@@ -457,12 +455,3 @@ function renderGraph(canvas, data, contactName) {
   buildLegend();
 }
 
-function copyAiSuggestion(el) {
-  const msg = el.dataset.msg;
-  if (!msg) return;
-  navigator.clipboard.writeText(msg).then(() => toast('Mensagem copiada!')).catch(() => {
-    // Fallback: put in chat input
-    const input = document.getElementById('msgInput');
-    if (input) { input.value = msg; toast('Sugestao adicionada ao chat'); }
-  });
-}
