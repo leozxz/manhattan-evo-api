@@ -391,9 +391,14 @@ async function saveContact() {
   contactNames[selectedGroup] = fullName;
   if (selectedGroupData) selectedGroupData.pushName = fullName;
 
-  // Update header subtitle
+  // Update header — show name as title, phone as subtitle
+  const nameEl = document.querySelector('.chat-messages-header .chat-name');
   const subtitleEl = document.getElementById('chatHeaderSubtitle');
-  if (subtitleEl) subtitleEl.textContent = fullName;
+  if (nameEl) nameEl.textContent = fullName;
+  if (subtitleEl) {
+    const phone = selectedGroupData?.phone || selectedGroup.split('@')[0];
+    subtitleEl.textContent = /^\d{10,15}$/.test(phone) ? formatPhone(phone) : phone;
+  }
 
   // Update chat list item
   const chatRef = allChats.find(c => c.id === selectedGroup);

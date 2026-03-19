@@ -343,6 +343,7 @@ async function fetchMessagesFromDB(instanceId, instanceName, remoteJid, limit) {
 }
 
 async function extractFromMessages(instanceId, instanceName, remoteJid, messageCount) {
+  const db = getPool();
   const messages = await fetchMessagesFromDB(instanceId, instanceName, remoteJid, messageCount || 50);
 
   // Extract text from messages
