@@ -208,6 +208,8 @@ async function deleteKnowledge() {
 // =====================
 // TASKS PANEL
 // =====================
+let _taskCache = []; // cache for modal access
+
 async function loadTasksPanel() {
   const body = document.getElementById('knowledgePanelBody');
   if (!body) return;
@@ -217,6 +219,7 @@ async function loadTasksPanel() {
     const res = await api('GET', '/knowledge/tasks/' + currentInstance + '?remoteJid=' + encodeURIComponent(selectedGroup));
 
     if (!res.ok || !Array.isArray(res.data) || res.data.length === 0) {
+      _taskCache = [];
       body.innerHTML = `
         <div class="knowledge-empty">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="#ccc"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2z"/></svg>
@@ -227,6 +230,7 @@ async function loadTasksPanel() {
       return;
     }
 
+    _taskCache = res.data;
     body.innerHTML = '';
 
     const taskList = document.createElement('div');
@@ -234,94 +238,132 @@ async function loadTasksPanel() {
 
     res.data.forEach(task => {
       const card = document.createElement('div');
-      card.className = 'task-card' + (task.status === 'concluida' ? ' task-done' : '');
+      card.className = 'task-card';
       card.dataset.taskId = task.id;
+      card.onclick = () => openTaskModal(task.id);
 
       const priorityColors = { alta: '#ef4444', media: '#f59e0b', baixa: '#3b82f6' };
-      const priorityLabels = { alta: 'Alta', media: 'Media', baixa: 'Baixa' };
       const color = priorityColors[task.priority] || '#9ca3af';
+      const isNew = task.status === 'nova';
 
       card.innerHTML = `
-        <div class="task-card-header">
-          <label class="task-checkbox" title="Marcar como ${task.status === 'concluida' ? 'pendente' : 'concluida'}">
-            <input type="checkbox" ${task.status === 'concluida' ? 'checked' : ''} onchange="toggleTaskStatus('${task.id}', this.checked)">
-            <span class="task-check-icon"></span>
-          </label>
-          <div class="task-card-content">
-            <div class="task-title">${escapeHtml(task.title)}</div>
-            ${task.description ? '<div class="task-desc">' + escapeHtml(task.description) + '</div>' : ''}
-          </div>
-          <button class="task-delete" onclick="deleteTaskItem('${task.id}')" title="Remover">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="#9ca3af"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-          </button>
-        </div>
-        <div class="task-card-footer">
-          <span class="task-priority" style="color:${color}; border-color:${color}">${priorityLabels[task.priority] || task.priority}</span>
-          ${task.dueDate ? '<span class="task-due">' + escapeHtml(task.dueDate) + '</span>' : ''}
+        <div class="task-priority-bar" style="background:${color}"></div>
+        <div class="task-card-body">
+          <div class="task-title">${escapeHtml(task.title)}</div>
+          ${isNew ? '<div class="task-new-actions"><button class="task-accept-btn" onclick="event.stopPropagation();acceptTask(\'' + task.id + '\')">Aceitar</button><button class="task-reject-btn" onclick="event.stopPropagation();rejectTask(\'' + task.id + '\')">Recusar</button></div>' : ''}
         </div>
       `;
       taskList.appendChild(card);
     });
 
     body.appendChild(taskList);
-
-    const actions = document.createElement('div');
-    actions.className = 'knowledge-actions';
-    actions.innerHTML = '<button class="btn btn-primary btn-sm" onclick="extractTasks()" style="width:100%">Regerar tarefas com IA</button>';
-    body.appendChild(actions);
-  } catch (err) {
-    body.innerHTML = `
-      <div class="knowledge-empty">
-        <p>Erro ao carregar tarefas.</p>
-        <button class="btn btn-primary btn-sm" onclick="loadTasksPanel()">Tentar novamente</button>
-      </div>
-    `;
+  } catch {
+    body.innerHTML = '<div class="knowledge-empty"><p>Erro ao carregar tarefas.</p><button class="btn btn-primary btn-sm" onclick="loadTasksPanel()">Tentar novamente</button></div>';
   }
+}
+
+function openTaskModal(taskId) {
+  const task = _taskCache.find(t => t.id === taskId);
+  if (!task) return;
+
+  const priorityColors = { alta: '#ef4444', media: '#f59e0b', baixa: '#3b82f6' };
+  const created = task.createdAt ? new Date(task.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'taskModal';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
+    <div class="modal-box" style="width:380px" onclick="event.stopPropagation()">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h3 style="font-size:15px;font-weight:700">Tarefa</h3>
+        <button onclick="document.getElementById('taskModal').remove()" style="border:none;background:none;font-size:20px;cursor:pointer;color:#999">&times;</button>
+      </div>
+      <div class="form-group">
+        <label style="font-size:11px;font-weight:600;color:var(--text-muted)">Titulo</label>
+        <input type="text" id="taskModalTitle" value="${escapeHtml(task.title)}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label style="font-size:11px;font-weight:600;color:var(--text-muted)">Descricao</label>
+        <textarea id="taskModalDesc" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical">${escapeHtml(task.description || '')}</textarea>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:10px">
+        <div class="form-group" style="flex:1">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted)">Prioridade</label>
+          <select id="taskModalPriority" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px">
+            <option value="baixa" ${task.priority === 'baixa' ? 'selected' : ''}>Baixa</option>
+            <option value="media" ${task.priority === 'media' ? 'selected' : ''}>Media</option>
+            <option value="alta" ${task.priority === 'alta' ? 'selected' : ''}>Alta</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted)">Status</label>
+          <div style="padding:8px 10px;font-size:12px;color:var(--text-secondary);text-transform:capitalize">${task.status}</div>
+        </div>
+      </div>
+      ${created ? '<div style="margin-top:10px;font-size:10px;color:var(--text-muted)">Criada em: ' + created + '</div>' : ''}
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button onclick="saveTaskModal('${task.id}')" class="btn btn-primary btn-sm" style="flex:1">Salvar</button>
+        <button onclick="completeTask('${task.id}')" class="btn btn-secondary btn-sm" style="flex:1">Concluir</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+}
+
+async function saveTaskModal(taskId) {
+  const title = document.getElementById('taskModalTitle').value.trim();
+  const description = document.getElementById('taskModalDesc').value.trim();
+  const priority = document.getElementById('taskModalPriority').value;
+  if (!title) return toast('Titulo obrigatorio', 'error');
+
+  try {
+    await api('PUT', '/knowledge/task/' + currentInstance, { taskId, title, description, priority });
+    toast('Tarefa atualizada');
+    const modal = document.getElementById('taskModal');
+    if (modal) modal.remove();
+    await loadTasksPanel();
+  } catch { toast('Erro ao salvar', 'error'); }
+}
+
+async function acceptTask(taskId) {
+  try {
+    await api('PUT', '/knowledge/task/' + currentInstance, { taskId, status: 'aceita' });
+    await loadTasksPanel();
+  } catch { toast('Erro ao aceitar tarefa', 'error'); }
+}
+
+async function rejectTask(taskId) {
+  try {
+    await api('PUT', '/knowledge/task/' + currentInstance, { taskId, status: 'recusada' });
+    const card = document.querySelector('.task-card[data-task-id="' + taskId + '"]');
+    if (card) { card.style.opacity = '0'; card.style.transform = 'translateX(20px)'; setTimeout(() => { card.remove(); }, 200); }
+  } catch { toast('Erro ao recusar tarefa', 'error'); }
+}
+
+async function completeTask(taskId) {
+  try {
+    await api('PUT', '/knowledge/task/' + currentInstance, { taskId, status: 'concluida' });
+    toast('Tarefa concluida!');
+    const modal = document.getElementById('taskModal');
+    if (modal) modal.remove();
+    await loadTasksPanel();
+  } catch { toast('Erro ao concluir tarefa', 'error'); }
 }
 
 async function extractTasks() {
   const body = document.getElementById('knowledgePanelBody');
-  if (body) body.innerHTML = '<div class="spinner" style="margin-top:40px"></div><p style="text-align:center;color:#888;margin-top:8px;font-size:12px">Gerando tarefas com IA...</p>';
+  if (body) body.innerHTML = '<div class="spinner" style="margin-top:40px"></div><p style="text-align:center;color:#888;margin-top:8px;font-size:12px">Analisando conversa...</p>';
 
   try {
-    const res = await api('POST', '/knowledge/tasks/' + currentInstance, {
-      remoteJid: selectedGroup
-    });
-
-    if (res.ok) {
-      toast('Tarefas geradas!');
-    } else {
-      toast('Falha ao gerar tarefas', 'error');
-    }
-  } catch (err) {
-    toast('Erro: ' + err.message, 'error');
-  }
+    const res = await api('POST', '/knowledge/tasks/' + currentInstance, { remoteJid: selectedGroup });
+    if (res.ok) toast('Tarefas atualizadas!');
+    else toast('Falha ao gerar tarefas', 'error');
+  } catch (err) { toast('Erro: ' + err.message, 'error'); }
 
   await loadTasksPanel();
-}
-
-async function toggleTaskStatus(taskId, done) {
-  try {
-    await api('PUT', '/knowledge/task/' + currentInstance, {
-      taskId,
-      status: done ? 'concluida' : 'pendente'
-    });
-    // Update card visually
-    const card = document.querySelector('.task-card[data-task-id="' + taskId + '"]');
-    if (card) card.classList.toggle('task-done', done);
-  } catch {
-    toast('Erro ao atualizar tarefa', 'error');
-  }
-}
-
-async function deleteTaskItem(taskId) {
-  try {
-    await api('DELETE', '/knowledge/task/' + currentInstance + '?taskId=' + taskId);
-    const card = document.querySelector('.task-card[data-task-id="' + taskId + '"]');
-    if (card) { card.style.opacity = '0'; setTimeout(() => card.remove(), 200); }
-  } catch {
-    toast('Erro ao remover tarefa', 'error');
-  }
 }
 
 // =====================

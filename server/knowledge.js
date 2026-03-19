@@ -496,12 +496,19 @@ async function extractTasks(instanceId, instanceName, remoteJid) {
     return await getContactTasks(instanceId, remoteJid);
   }
 
-  // Get existing tasks to avoid duplicates
-  const existingTasks = await getContactTasks(instanceId, remoteJid);
-  console.log('[Tasks] Existing tasks:', existingTasks.length, existingTasks.map(t => '"' + t.title + '" [' + t.status + ']'));
+  // Get ALL tasks (including recusadas/concluidas) to avoid duplicates
+  const allTasksResult = await db.query(`
+    SELECT ct.* FROM "ContactTask" ct
+    JOIN "ContactKnowledge" ck ON ct."contactKnowledgeId" = ck.id
+    WHERE ck."remoteJid" = $1 AND ck."instanceId" = $2
+    ORDER BY ct."createdAt" DESC
+  `, [remoteJid, instanceId]);
+  const allTasks = allTasksResult.rows;
+  const activeTasks = allTasks.filter(t => t.status !== 'recusada' && t.status !== 'concluida');
+  console.log('[Tasks] All tasks:', allTasks.length, '| Active:', activeTasks.length, '| Recusadas/Concluidas:', allTasks.length - activeTasks.length);
 
-  const existingText = existingTasks.length > 0
-    ? existingTasks.map(t => '- [' + t.status + '] ' + t.title + (t.description ? ' (' + t.description + ')' : '')).join('\n')
+  const existingText = allTasks.length > 0
+    ? allTasks.map(t => '- [' + t.status + '] ' + t.title + (t.description ? ' (' + t.description + ')' : '')).join('\n')
     : 'Nenhuma tarefa existente.';
 
   const prompt = TASK_EXTRACTION_PROMPT
@@ -531,8 +538,8 @@ async function extractTasks(instanceId, instanceName, remoteJid) {
 
   console.log('[Tasks] LLM returned', result.tasks.length, 'tasks:', result.tasks.map(t => '"' + t.title + '"'));
 
-  // Append only truly new tasks (skip if title is too similar to existing)
-  const existingTitles = existingTasks.map(t => t.title.toLowerCase().trim());
+  // Append only truly new tasks (skip if title is too similar to ANY task including recusadas)
+  const existingTitles = allTasks.map(t => t.title.toLowerCase().trim());
   let added = 0;
   for (const task of result.tasks.slice(0, 5)) {
     const newTitle = (task.title || '').toLowerCase().trim();
@@ -548,15 +555,15 @@ async function extractTasks(instanceId, instanceName, remoteJid) {
       continue;
     }
     await db.query(
-      `INSERT INTO "ContactTask" ("contactKnowledgeId", title, description, priority, "dueDate")
-       VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO "ContactTask" ("contactKnowledgeId", title, description, priority, status, "dueDate")
+       VALUES ($1, $2, $3, $4, 'nova', $5)`,
       [contactKnowledgeId, task.title, task.description || '', task.priority || 'media', task.dueDate || null]
     );
     console.log('[Tasks] ADDED:', task.title, '| priority:', task.priority);
     added++;
   }
 
-  console.log('[Tasks] Done. Added', added, 'new tasks for', remoteJid, '(total existing:', existingTasks.length + added, ')');
+  console.log('[Tasks] Done. Added', added, 'new tasks for', remoteJid);
   return getContactTasks(instanceId, remoteJid);
 }
 
@@ -566,6 +573,7 @@ async function getContactTasks(instanceId, remoteJid) {
     SELECT ct.* FROM "ContactTask" ct
     JOIN "ContactKnowledge" ck ON ct."contactKnowledgeId" = ck.id
     WHERE ck."remoteJid" = $1 AND ck."instanceId" = $2
+      AND ct.status NOT IN ('recusada', 'concluida')
     ORDER BY
       CASE ct.priority WHEN 'alta' THEN 0 WHEN 'media' THEN 1 WHEN 'baixa' THEN 2 ELSE 3 END,
       ct."createdAt" DESC
