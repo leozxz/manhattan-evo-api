@@ -33,7 +33,20 @@ function switchKnowledgeTab(tab) {
     t.classList.toggle('active', t.dataset.tab === tab);
   });
   if (tab === 'info') loadKnowledgePanel();
-  else if (tab === 'tasks') loadTasksPanel();
+  else if (tab === 'tasks') autoGenerateAndLoadTasks();
+}
+
+async function autoGenerateAndLoadTasks() {
+  const body = document.getElementById('knowledgePanelBody');
+  if (body) body.innerHTML = '<div class="spinner" style="margin-top:40px"></div><p style="text-align:center;color:#888;margin-top:8px;font-size:12px">Analisando conversa...</p>';
+
+  try {
+    await api('POST', '/knowledge/tasks/' + currentInstance, {
+      remoteJid: selectedGroup
+    });
+  } catch {}
+
+  await loadTasksPanel();
 }
 
 const KNOWLEDGE_CATEGORIES = {

@@ -140,20 +140,25 @@ Responda SOMENTE com JSON valido no seguinte formato:
 
 const TASK_EXTRACTION_PROMPT = `Voce e um assistente que analisa conversas de WhatsApp e identifica tarefas/acoes pendentes para o atendente executar em relacao ao cliente.
 
-Analise as mensagens e extraia TAREFAS ACIONAVEIS que o atendente deveria fazer. Exemplos:
-- Cliente pediu um documento → tarefa "Enviar documento X"
-- Cliente mencionou interesse em produto → tarefa "Apresentar produto Y"
-- Cliente tem duvida pendente → tarefa "Responder sobre Z"
-- Cliente agendou algo → tarefa "Confirmar agendamento para data"
-- Cliente reclamou de algo → tarefa "Resolver reclamacao sobre W"
-- Follow-up necessario → tarefa "Fazer follow-up sobre assunto"
+Analise as mensagens e extraia NOVAS tarefas acionaveis. Exemplos:
+- Cliente pediu um documento → "Enviar documento X"
+- Cliente mencionou interesse em produto → "Apresentar produto Y"
+- Cliente tem duvida pendente → "Responder sobre Z"
+- Cliente agendou algo → "Confirmar agendamento para data"
+- Cliente reclamou de algo → "Resolver reclamacao sobre W"
+- Follow-up necessario → "Fazer follow-up sobre assunto"
 
 REGRAS:
 1. Extraia APENAS tarefas reais baseadas no conteudo das mensagens.
 2. Prioridade: "alta" (urgente/reclamacao), "media" (pedido normal), "baixa" (follow-up/lembrete).
-3. Inclua data limite se mencionada ou inferivel na conversa.
-4. Maximo 8 tarefas. Foque nas mais relevantes e recentes.
-5. Nao crie tarefas para coisas ja resolvidas na conversa.
+3. Inclua data limite se mencionada ou inferivel.
+4. Maximo 5 novas tarefas. Foque nas mais relevantes e recentes.
+5. NAO crie tarefas para coisas ja resolvidas na conversa.
+6. NUNCA repita tarefas que ja existem (veja a lista abaixo). Se uma tarefa existente ainda faz sentido, NAO a recrie. Crie apenas tarefas NOVAS que ainda nao foram identificadas.
+7. Se nao houver novas tarefas a criar, retorne "tasks": [].
+
+TAREFAS JA EXISTENTES (NAO REPETIR):
+{existingTasks}
 
 MENSAGENS RECENTES:
 {messages}
@@ -478,26 +483,40 @@ async function extractTasks(instanceId, instanceName, remoteJid) {
     return sender + ': ' + text;
   }).filter(l => l.includes(': ') && l.split(': ')[1]).join('\n');
 
-  const prompt = TASK_EXTRACTION_PROMPT.replace('{messages}', msgText);
+  // Get existing tasks to avoid duplicates
+  const existingTasks = await getContactTasks(instanceId, remoteJid);
+  const existingText = existingTasks.length > 0
+    ? existingTasks.map(t => '- [' + t.status + '] ' + t.title + (t.description ? ' (' + t.description + ')' : '')).join('\n')
+    : 'Nenhuma tarefa existente.';
+
+  const prompt = TASK_EXTRACTION_PROMPT
+    .replace('{existingTasks}', existingText)
+    .replace('{messages}', msgText);
   const result = await callOpenAI(prompt);
 
-  if (!result.tasks || !Array.isArray(result.tasks)) return [];
-
-  // Clear old AI-generated tasks (keep manually edited ones)
-  await db.query(
-    'DELETE FROM "ContactTask" WHERE "contactKnowledgeId" = $1',
-    [contactKnowledgeId]
-  );
-
-  // Insert new tasks
-  for (const task of result.tasks.slice(0, 8)) {
-    await db.query(
-      `INSERT INTO "ContactTask" ("contactKnowledgeId", title, description, priority, "dueDate")
-       VALUES ($1, $2, $3, $4, $5)`,
-      [contactKnowledgeId, task.title, task.description || '', task.priority || 'media', task.dueDate || null]
-    );
+  if (!result.tasks || !Array.isArray(result.tasks) || result.tasks.length === 0) {
+    return existingTasks; // No new tasks, return existing
   }
 
+  // Append only truly new tasks (skip if title is too similar to existing)
+  const existingTitles = existingTasks.map(t => t.title.toLowerCase().trim());
+  let added = 0;
+  for (const task of result.tasks.slice(0, 5)) {
+    const newTitle = (task.title || '').toLowerCase().trim();
+    const isDuplicate = existingTitles.some(et =>
+      et === newTitle || et.includes(newTitle) || newTitle.includes(et)
+    );
+    if (!isDuplicate && newTitle) {
+      await db.query(
+        `INSERT INTO "ContactTask" ("contactKnowledgeId", title, description, priority, "dueDate")
+         VALUES ($1, $2, $3, $4, $5)`,
+        [contactKnowledgeId, task.title, task.description || '', task.priority || 'media', task.dueDate || null]
+      );
+      added++;
+    }
+  }
+
+  console.log('[Tasks] Added', added, 'new tasks for', remoteJid, '(existing:', existingTasks.length, ')');
   return getContactTasks(instanceId, remoteJid);
 }
 
