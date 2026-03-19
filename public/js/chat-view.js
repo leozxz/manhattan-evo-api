@@ -166,8 +166,10 @@ async function selectGroup(chat, el) {
   await fetchAndRenderMessages();
   if (isGroup) loadCachedParticipants();
   else {
-    showKnowledgePanel = false;
-    // Auto-load knowledge + tasks in background
+    // Auto-open panel for private chats
+    showKnowledgePanel = true;
+    const kp = document.getElementById('knowledgePanel');
+    if (kp) kp.style.display = 'flex';
     loadUnifiedPanel();
   }
   renderPinnedBanner();
