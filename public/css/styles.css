@@ -609,25 +609,30 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 .knowledge-tab:hover { background: var(--accent-light); }
 
 /* Task Cards */
-.task-list { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.task-list { padding: 10px 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
 .task-card {
-  display: flex; border-radius: 8px; overflow: hidden;
+  display: flex; border-radius: 12px; overflow: hidden;
   background: var(--panel); border: 1px solid var(--border-light);
-  cursor: pointer; transition: all 0.2s;
+  cursor: pointer; transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
-.task-card:hover { border-color: var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-.task-priority-bar { width: 4px; flex-shrink: 0; border-radius: 4px 0 0 4px; }
-.task-card-body { flex: 1; padding: 8px 10px; min-width: 0; }
-.task-title { font-size: 12.5px; font-weight: 600; color: var(--text); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.task-new-actions { display: flex; gap: 6px; margin-top: 6px; }
+.task-card:hover { border-color: var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-1px); }
+.task-priority-bar { width: 5px; flex-shrink: 0; }
+.task-card-body { flex: 1; padding: 14px 16px; min-width: 0; }
+.task-title {
+  font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.task-new-actions { display: flex; gap: 8px; margin-top: 10px; }
 .task-accept-btn, .task-reject-btn {
-  font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 6px;
+  font-size: 11px; font-weight: 600; padding: 5px 14px; border-radius: 8px;
   border: none; cursor: pointer; transition: all 0.15s;
 }
 .task-accept-btn { background: var(--accent); color: #fff; }
-.task-accept-btn:hover { background: #00b359; }
-.task-reject-btn { background: var(--bg); color: var(--text-muted); }
-.task-reject-btn:hover { background: var(--border); color: var(--text); }
+.task-accept-btn:hover { background: #00b359; box-shadow: 0 2px 6px rgba(0,209,102,0.3); }
+.task-reject-btn { background: var(--panel-alt); color: var(--text-muted); border: 1px solid var(--border-light); }
+.task-reject-btn:hover { background: var(--border-light); color: var(--text); }
 
 /* Knowledge graph modal */
 .graph-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; }
