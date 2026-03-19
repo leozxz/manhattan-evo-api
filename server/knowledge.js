@@ -82,6 +82,21 @@ async function initTables() {
       "updatedAt" TIMESTAMP DEFAULT NOW()
     );
 
+    -- Deduplicate existing entities before adding constraint
+    DELETE FROM "KnowledgeEntity" a USING "KnowledgeEntity" b
+    WHERE a.id > b.id
+      AND a."contactKnowledgeId" = b."contactKnowledgeId"
+      AND a.category = b.category
+      AND a.label = b.label;
+
+    -- Unique constraint to prevent duplicate entities
+    DO $$ BEGIN
+      ALTER TABLE "KnowledgeEntity" ADD CONSTRAINT ke_unique_entity
+        UNIQUE ("contactKnowledgeId", category, label);
+    EXCEPTION WHEN duplicate_table THEN NULL;
+    WHEN duplicate_object THEN NULL;
+    END $$;
+
     CREATE INDEX IF NOT EXISTS idx_ke_contact ON "KnowledgeEntity"("contactKnowledgeId");
     CREATE INDEX IF NOT EXISTS idx_ke_category ON "KnowledgeEntity"(category);
     CREATE INDEX IF NOT EXISTS idx_kr_contact ON "KnowledgeRelationship"("contactKnowledgeId");
@@ -284,22 +299,19 @@ async function saveExtraction(db, instanceId, remoteJid, pushName, extraction) {
 
   const contactId = upsert.rows[0].id;
 
-  // Upsert entities
+  // Upsert entities (single statement, no duplicates)
   for (const entity of (extraction.entities || [])) {
     await db.query(`
       INSERT INTO "KnowledgeEntity" (id, "contactKnowledgeId", category, label, value, confidence, source, "updatedAt")
       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, 'chat_extraction', NOW())
-      ON CONFLICT DO NOTHING
+      ON CONFLICT ("contactKnowledgeId", category, label)
+      DO UPDATE SET value = $4, confidence = $5, "updatedAt" = NOW()
     `, [contactId, entity.category, entity.label, entity.value, entity.confidence || 1.0]);
-
-    // Update if exists with same category+label
-    await db.query(`
-      UPDATE "KnowledgeEntity" SET value = $1, confidence = $2, "updatedAt" = NOW()
-      WHERE "contactKnowledgeId" = $3 AND category = $4 AND label = $5
-    `, [entity.value, entity.confidence || 1.0, contactId, entity.category, entity.label]);
   }
 
-  // Save relationships
+  // Clear old relationships and re-insert (simpler than upsert for edges)
+  await db.query('DELETE FROM "KnowledgeRelationship" WHERE "contactKnowledgeId" = $1', [contactId]);
+
   for (const rel of (extraction.relationships || [])) {
     const from = await db.query(
       'SELECT id FROM "KnowledgeEntity" WHERE "contactKnowledgeId" = $1 AND label = $2 LIMIT 1',
@@ -313,7 +325,6 @@ async function saveExtraction(db, instanceId, remoteJid, pushName, extraction) {
       await db.query(`
         INSERT INTO "KnowledgeRelationship" (id, "contactKnowledgeId", "fromEntityId", "toEntityId", type, description)
         VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5)
-        ON CONFLICT DO NOTHING
       `, [contactId, from.rows[0].id, to.rows[0].id, rel.type, rel.description || null]);
     }
   }
