@@ -404,14 +404,6 @@ async function saveContact() {
   if (modal) modal.remove();
 
   toast('Contato salvo: ' + fullName);
-
-  // Persist to knowledge as PESSOA entity
-  try {
-    await api('POST', '/knowledge/extract/' + currentInstance, {
-      remoteJid: selectedGroup,
-      messageCount: 1 // minimal, just to ensure ContactKnowledge exists
-    });
-  } catch {}
 }
 
 // =====================

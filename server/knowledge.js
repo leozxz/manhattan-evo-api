@@ -528,12 +528,12 @@ async function extractTasks(instanceId, instanceName, remoteJid) {
 
   if (!result.tasks || !Array.isArray(result.tasks)) {
     console.log('[Tasks] No tasks array in response, returning existing');
-    return existingTasks;
+    return activeTasks;
   }
 
   if (result.tasks.length === 0) {
     console.log('[Tasks] LLM returned empty tasks array, no new tasks to add');
-    return existingTasks;
+    return activeTasks;
   }
 
   console.log('[Tasks] LLM returned', result.tasks.length, 'tasks:', result.tasks.map(t => '"' + t.title + '"'));
