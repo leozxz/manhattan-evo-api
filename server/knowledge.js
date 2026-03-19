@@ -472,10 +472,17 @@ async function extractTasks(instanceId, instanceName, remoteJid) {
     );
   }
   const contactKnowledgeId = ck.rows[0].id;
+  console.log('[Tasks] extractTasks called for', remoteJid, 'contactKnowledgeId:', contactKnowledgeId);
 
   // Fetch messages
-  const messages = await fetchMessagesFromDB(instanceId, instanceName, remoteJid);
-  if (messages.length === 0) throw new Error('Nenhuma mensagem encontrada');
+  let messages;
+  try {
+    messages = await fetchMessagesFromDB(instanceId, instanceName, remoteJid);
+  } catch (err) {
+    console.log('[Tasks] fetchMessagesFromDB error:', err.message);
+    throw err;
+  }
+  console.log('[Tasks] Fetched', messages.length, 'messages from DB');
 
   const msgText = messages.map(m => {
     const sender = m.key?.fromMe ? 'Atendente' : (m.pushName || 'Cliente');
@@ -483,8 +490,16 @@ async function extractTasks(instanceId, instanceName, remoteJid) {
     return sender + ': ' + text;
   }).filter(l => l.includes(': ') && l.split(': ')[1]).join('\n');
 
+  console.log('[Tasks] Message text lines:', msgText.split('\n').length, '| Total chars:', msgText.length);
+  if (!msgText) {
+    console.log('[Tasks] No text messages found, skipping LLM call');
+    return await getContactTasks(instanceId, remoteJid);
+  }
+
   // Get existing tasks to avoid duplicates
   const existingTasks = await getContactTasks(instanceId, remoteJid);
+  console.log('[Tasks] Existing tasks:', existingTasks.length, existingTasks.map(t => '"' + t.title + '" [' + t.status + ']'));
+
   const existingText = existingTasks.length > 0
     ? existingTasks.map(t => '- [' + t.status + '] ' + t.title + (t.description ? ' (' + t.description + ')' : '')).join('\n')
     : 'Nenhuma tarefa existente.';
@@ -492,11 +507,29 @@ async function extractTasks(instanceId, instanceName, remoteJid) {
   const prompt = TASK_EXTRACTION_PROMPT
     .replace('{existingTasks}', existingText)
     .replace('{messages}', msgText);
-  const result = await callOpenAI(prompt);
 
-  if (!result.tasks || !Array.isArray(result.tasks) || result.tasks.length === 0) {
-    return existingTasks; // No new tasks, return existing
+  console.log('[Tasks] Calling OpenAI... prompt length:', prompt.length);
+  let result;
+  try {
+    result = await callOpenAI(prompt);
+  } catch (err) {
+    console.error('[Tasks] OpenAI error:', err.message);
+    throw err;
   }
+
+  console.log('[Tasks] OpenAI response:', JSON.stringify(result));
+
+  if (!result.tasks || !Array.isArray(result.tasks)) {
+    console.log('[Tasks] No tasks array in response, returning existing');
+    return existingTasks;
+  }
+
+  if (result.tasks.length === 0) {
+    console.log('[Tasks] LLM returned empty tasks array, no new tasks to add');
+    return existingTasks;
+  }
+
+  console.log('[Tasks] LLM returned', result.tasks.length, 'tasks:', result.tasks.map(t => '"' + t.title + '"'));
 
   // Append only truly new tasks (skip if title is too similar to existing)
   const existingTitles = existingTasks.map(t => t.title.toLowerCase().trim());
@@ -506,17 +539,24 @@ async function extractTasks(instanceId, instanceName, remoteJid) {
     const isDuplicate = existingTitles.some(et =>
       et === newTitle || et.includes(newTitle) || newTitle.includes(et)
     );
-    if (!isDuplicate && newTitle) {
-      await db.query(
-        `INSERT INTO "ContactTask" ("contactKnowledgeId", title, description, priority, "dueDate")
-         VALUES ($1, $2, $3, $4, $5)`,
-        [contactKnowledgeId, task.title, task.description || '', task.priority || 'media', task.dueDate || null]
-      );
-      added++;
+    if (isDuplicate) {
+      console.log('[Tasks] SKIP duplicate:', task.title);
+      continue;
     }
+    if (!newTitle) {
+      console.log('[Tasks] SKIP empty title');
+      continue;
+    }
+    await db.query(
+      `INSERT INTO "ContactTask" ("contactKnowledgeId", title, description, priority, "dueDate")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [contactKnowledgeId, task.title, task.description || '', task.priority || 'media', task.dueDate || null]
+    );
+    console.log('[Tasks] ADDED:', task.title, '| priority:', task.priority);
+    added++;
   }
 
-  console.log('[Tasks] Added', added, 'new tasks for', remoteJid, '(existing:', existingTasks.length, ')');
+  console.log('[Tasks] Done. Added', added, 'new tasks for', remoteJid, '(total existing:', existingTasks.length + added, ')');
   return getContactTasks(instanceId, remoteJid);
 }
 
@@ -672,9 +712,16 @@ async function handleRequest(req, res, urlPath, fullApiPath) {
     // POST /knowledge/tasks/extract/:instanceName  body: { remoteJid }
     if (req.method === 'POST' && action === 'tasks') {
       const body = await readBody(req);
+      console.log('[Tasks] POST /knowledge/tasks/', instanceName, 'body:', JSON.stringify(body));
       if (!body.remoteJid) return json(400, { error: 'remoteJid is required in body' });
-      const tasks = await extractTasks(instanceId, instanceName, body.remoteJid);
-      return json(200, tasks);
+      try {
+        const tasks = await extractTasks(instanceId, instanceName, body.remoteJid);
+        console.log('[Tasks] Returning', tasks.length, 'tasks');
+        return json(200, tasks);
+      } catch (err) {
+        console.error('[Tasks] extractTasks failed:', err.message, err.stack);
+        return json(500, { error: 'Task extraction failed: ' + err.message });
+      }
     }
 
     // PUT /knowledge/task/:instanceName  body: { taskId, status?, title?, priority? }
