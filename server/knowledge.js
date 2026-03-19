@@ -18,38 +18,11 @@ const EVO_API_KEY = () => process.env.EVO_API_KEY || '';
 // =====================
 let pool = null;
 
-const dns = require('dns');
-const { URL: NodeURL } = require('url');
-
-// Force IPv4 globally
-dns.setDefaultResultOrder('ipv4first');
-
-// Also patch dns.lookup to force IPv4 family
-const originalLookup = dns.lookup;
-dns.lookup = function(hostname, options, callback) {
-  if (typeof options === 'function') {
-    callback = options;
-    options = {};
-  }
-  if (typeof options === 'number') {
-    options = { family: options };
-  }
-  options = options || {};
-  options.family = 4; // Force IPv4
-  return originalLookup.call(dns, hostname, options, callback);
-};
-
-let poolInitPromise = null;
-
 function getPool() {
   if (!pool) {
     const connStr = DATABASE_URL();
     if (!connStr) throw new Error('DATABASE_URL not set');
-    pool = new Pool({
-      connectionString: connStr,
-      max: 5,
-      ssl: { rejectUnauthorized: false },
-    });
+    pool = new Pool({ connectionString: connStr, max: 5 });
   }
   return pool;
 }
