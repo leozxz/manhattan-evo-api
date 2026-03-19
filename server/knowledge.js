@@ -19,8 +19,27 @@ const EVO_API_KEY = () => process.env.EVO_API_KEY || '';
 let pool = null;
 
 const dns = require('dns');
-// Force IPv4 resolution — Supabase returns IPv6 which Railway can't reach
+const { URL: NodeURL } = require('url');
+
+// Force IPv4 globally
 dns.setDefaultResultOrder('ipv4first');
+
+// Also patch dns.lookup to force IPv4 family
+const originalLookup = dns.lookup;
+dns.lookup = function(hostname, options, callback) {
+  if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  }
+  if (typeof options === 'number') {
+    options = { family: options };
+  }
+  options = options || {};
+  options.family = 4; // Force IPv4
+  return originalLookup.call(dns, hostname, options, callback);
+};
+
+let poolInitPromise = null;
 
 function getPool() {
   if (!pool) {
@@ -29,7 +48,7 @@ function getPool() {
     pool = new Pool({
       connectionString: connStr,
       max: 5,
-      ssl: connStr.includes('sslmode=') ? undefined : { rejectUnauthorized: false },
+      ssl: { rejectUnauthorized: false },
     });
   }
   return pool;
