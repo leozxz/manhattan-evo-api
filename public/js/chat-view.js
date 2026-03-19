@@ -131,7 +131,7 @@ async function selectGroup(chat, el) {
         <div class="group-panel-body" id="panelBody">
           <div class="spinner" style="margin-top:40px"></div>
         </div>
-      </div>` : `<div class="group-panel knowledge-panel" id="knowledgePanel" style="display:none">
+      </div>` : `<div class="group-panel knowledge-panel" id="knowledgePanel" style="display:flex">
         <div class="group-panel-header">
           <span style="font-size:13px;font-weight:700">Perfil do Cliente</span>
           <div style="display:flex;gap:4px">
@@ -169,6 +169,12 @@ async function selectGroup(chat, el) {
 
   await fetchAndRenderMessages();
   if (isGroup) loadCachedParticipants();
+  else {
+    // Auto-load knowledge panel for private chats
+    showKnowledgePanel = true;
+    currentKnowledgeTab = 'info';
+    loadKnowledgePanel();
+  }
   renderPinnedBanner();
   startMsgPolling();
 }
