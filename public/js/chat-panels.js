@@ -330,6 +330,91 @@ async function extractTasks() {
 }
 
 // =====================
+// SAVE CONTACT
+// =====================
+function openSaveContactModal() {
+  if (!selectedGroup || !selectedGroupData) return;
+
+  const phone = selectedGroupData.phone || selectedGroup.split('@')[0];
+  const pushName = selectedGroupData.pushName || contactNames[selectedGroup] || '';
+
+  // Split pushName into first/last name as suggestion
+  const parts = pushName.trim().split(/\s+/);
+  const suggestFirst = parts[0] || '';
+  const suggestLast = parts.slice(1).join(' ') || '';
+
+  // Check if already saved
+  const savedName = contactNames[selectedGroup] || '';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'saveContactModal';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
+    <div class="modal-box" style="width:360px" onclick="event.stopPropagation()">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h3 style="font-size:15px;font-weight:700">Salvar Contato</h3>
+        <button onclick="document.getElementById('saveContactModal').remove()" style="border:none;background:none;font-size:20px;cursor:pointer;color:#999">&times;</button>
+      </div>
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:13px;color:var(--text-muted)">${escapeHtml(formatPhone(phone))}</div>
+      </div>
+      <div class="form-group">
+        <label style="font-size:11px;font-weight:600;color:var(--text-muted)">Nome</label>
+        <input type="text" id="contactFirstName" value="${escapeHtml(suggestFirst)}" placeholder="Nome" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label style="font-size:11px;font-weight:600;color:var(--text-muted)">Sobrenome</label>
+        <input type="text" id="contactLastName" value="${escapeHtml(suggestLast)}" placeholder="Sobrenome" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button onclick="document.getElementById('saveContactModal').remove()" class="btn btn-secondary btn-sm" style="flex:1">Cancelar</button>
+        <button onclick="saveContact()" class="btn btn-primary btn-sm" style="flex:1">Salvar</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  document.getElementById('contactFirstName').focus();
+}
+
+async function saveContact() {
+  const firstName = (document.getElementById('contactFirstName').value || '').trim();
+  const lastName = (document.getElementById('contactLastName').value || '').trim();
+
+  if (!firstName) return toast('Nome obrigatorio', 'error');
+
+  const fullName = lastName ? firstName + ' ' + lastName : firstName;
+
+  // Save locally in contactNames
+  contactNames[selectedGroup] = fullName;
+  if (selectedGroupData) selectedGroupData.pushName = fullName;
+
+  // Update header subtitle
+  const subtitleEl = document.getElementById('chatHeaderSubtitle');
+  if (subtitleEl) subtitleEl.textContent = fullName;
+
+  // Update chat list item
+  const chatRef = allChats.find(c => c.id === selectedGroup);
+  if (chatRef) { chatRef.pushName = fullName; renderGroupList(); }
+
+  // Close modal
+  const modal = document.getElementById('saveContactModal');
+  if (modal) modal.remove();
+
+  toast('Contato salvo: ' + fullName);
+
+  // Persist to knowledge as PESSOA entity
+  try {
+    await api('POST', '/knowledge/extract/' + currentInstance, {
+      remoteJid: selectedGroup,
+      messageCount: 1 // minimal, just to ensure ContactKnowledge exists
+    });
+  } catch {}
+}
+
+// =====================
 // GROUP INFO & PINNED MESSAGES
 // =====================
 async function loadGroupInfo() {

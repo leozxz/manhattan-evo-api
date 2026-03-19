@@ -62,7 +62,7 @@ async function selectGroup(chat, el) {
           <div class="chat-avatar${isGroup ? '' : ' chat-avatar-private'}" style="width:36px;height:36px">
             ${avatarHtml}
           </div>
-          <div class="chat-header-info" ${isGroup ? 'onclick="togglePanel()" style="cursor:pointer"' : ''}>
+          <div class="chat-header-info" ${isGroup ? 'onclick="togglePanel()"' : 'onclick="openSaveContactModal()"'} style="cursor:pointer">
             <div class="chat-name">${escapeHtml(displayName)}</div>
             <div class="chat-header-subtitle" id="chatHeaderSubtitle"></div>
           </div>
