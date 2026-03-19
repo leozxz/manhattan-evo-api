@@ -1,21 +1,28 @@
 const crypto = require('crypto');
+const redis = require('../services/redis');
 
 const PANEL_USER = () => process.env.PANEL_USER || 'admin';
 const PANEL_PASS = () => process.env.PANEL_PASS || '';
 
-const sessions = {};
+// In-memory fallback when Redis is unavailable
+const memorySessions = {};
 
-function createSession() {
+async function createSession() {
   const token = crypto.randomBytes(32).toString('hex');
-  sessions[token] = Date.now();
+  const stored = await redis.sessionSet(token);
+  if (!stored) memorySessions[token] = Date.now(); // fallback
   return token;
 }
 
-function isValidSession(token) {
-  const created = sessions[token];
+async function isValidSession(token) {
+  // Try Redis first
+  const redisResult = await redis.sessionValid(token);
+  if (redisResult !== null) return redisResult;
+  // Fallback to memory
+  const created = memorySessions[token];
   if (!created) return false;
   if (Date.now() - created > 86400000) {
-    delete sessions[token];
+    delete memorySessions[token];
     return false;
   }
   return true;
@@ -46,11 +53,11 @@ button:hover{background:#1da851}.err{color:#ea0038;font-size:13px;text-align:cen
 <button type="submit">Entrar</button></form></div></body></html>`;
 }
 
-function checkAuth(req, res, securityHeaders) {
+async function checkAuth(req, res, securityHeaders) {
   if (!PANEL_PASS()) return true;
 
   const cookies = parseCookies(req);
-  if (cookies.session && isValidSession(cookies.session)) return true;
+  if (cookies.session && await isValidSession(cookies.session)) return true;
 
   if (req.method === 'POST' && req.url === '/auth/login') return 'login';
 
@@ -62,13 +69,13 @@ function checkAuth(req, res, securityHeaders) {
 function handleLogin(req, res, securityHeaders) {
   let body = '';
   req.on('data', c => body += c);
-  req.on('end', () => {
+  req.on('end', async () => {
     const params = new URLSearchParams(body);
     const user = params.get('user');
     const pass = params.get('pass');
 
     if (user === PANEL_USER() && pass === PANEL_PASS()) {
-      const token = createSession();
+      const token = await createSession();
       res.writeHead(302, {
         'Set-Cookie': 'session=' + token + '; HttpOnly; SameSite=Strict; Path=/',
         'Location': '/',
