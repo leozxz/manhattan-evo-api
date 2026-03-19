@@ -45,13 +45,11 @@ async function selectGroup(chat, el) {
     avatarHtml = isGroup ? headerGroupSvg : headerPersonSvg;
   }
 
+  // Panel button only for groups (knowledge panel always open for private)
   const panelBtn = isGroup ? `
           <button class="btn btn-secondary btn-sm" onclick="togglePanel()" title="Ver participantes" style="margin-left:8px">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="#54656f"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-          </button>` : `
-          <button class="btn btn-secondary btn-sm" onclick="toggleKnowledgePanel()" title="Perfil do cliente" style="margin-left:8px">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="#54656f"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-          </button>`;
+          </button>` : '';
 
   const area = document.getElementById('chatArea');
   area.innerHTML = `
@@ -131,15 +129,14 @@ async function selectGroup(chat, el) {
         <div class="group-panel-body" id="panelBody">
           <div class="spinner" style="margin-top:40px"></div>
         </div>
-      </div>` : `<div class="group-panel knowledge-panel" id="knowledgePanel" style="display:none">
+      </div>` : `<div class="group-panel knowledge-panel" id="knowledgePanel" style="display:flex">
         <div class="group-panel-header">
           <span style="font-size:13px;font-weight:700">Perfil do Cliente</span>
-          <div style="display:flex;gap:4px">
-            <button class="btn btn-secondary btn-sm" onclick="openKnowledgeGraph()" title="Visualizar grafo">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="#54656f"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><line x1="7.5" y1="12" x2="16.5" y2="6" stroke="#54656f" stroke-width="1.5"/><line x1="7.5" y1="12" x2="16.5" y2="18" stroke="#54656f" stroke-width="1.5"/></svg>
-            </button>
-            <button class="btn btn-secondary btn-sm" onclick="toggleKnowledgePanel()">&times;</button>
-          </div>
+          <div class="header-spacer"></div>
+          <div class="polling-indicator"><div class="polling-dot"></div> ao vivo</div>
+          <button class="btn btn-secondary btn-sm" onclick="openKnowledgeGraph()" title="Visualizar grafo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#54656f"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><line x1="7.5" y1="12" x2="16.5" y2="6" stroke="#54656f" stroke-width="1.5"/><line x1="7.5" y1="12" x2="16.5" y2="18" stroke="#54656f" stroke-width="1.5"/></svg>
+          </button>
         </div>
         <div class="group-panel-body" id="knowledgePanelBody">
           <div class="spinner" style="margin-top:40px"></div>
@@ -453,7 +450,10 @@ async function fetchAndRenderMessages() {
       container.appendChild(wrapper);
     });
 
-    if (wasAtBottom || lastMsgCount <= total) container.scrollTop = container.scrollHeight;
+    if (wasAtBottom || lastMsgCount <= total) {
+      container.scrollTop = container.scrollHeight;
+      requestAnimationFrame(() => { container.scrollTop = container.scrollHeight; });
+    }
 
     // Lazy-load media
     mediaToLoad.forEach(m => loadMediaForMsg(m));

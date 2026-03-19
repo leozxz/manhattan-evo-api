@@ -40,11 +40,16 @@ const KNOWLEDGE_CATEGORIES = {
 };
 
 async function toggleKnowledgePanel() {
-  showKnowledgePanel = !showKnowledgePanel;
+  // For private chats, panel is always visible — just reload
   const panel = document.getElementById('knowledgePanel');
   if (!panel) return;
-  panel.style.display = showKnowledgePanel ? 'flex' : 'none';
-  if (showKnowledgePanel) loadUnifiedPanel();
+  if (panel.style.display === 'flex') {
+    loadUnifiedPanel();
+  } else {
+    showKnowledgePanel = true;
+    panel.style.display = 'flex';
+    loadUnifiedPanel();
+  }
 }
 
 async function loadUnifiedPanel() {

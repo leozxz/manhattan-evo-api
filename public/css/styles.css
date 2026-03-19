@@ -291,9 +291,9 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
   overflow-y: auto; display: flex; flex-direction: column; background: var(--panel);
 }
 .chat-list-header {
-  padding: 16px 20px; border-bottom: 1px solid var(--border-light);
+  padding: 0 20px; border-bottom: 1px solid var(--border-light);
   font-weight: 700; font-size: 14px; flex-shrink: 0;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.2px; height: 56px;
 }
 .new-chat-btn {
   width: 30px; height: 30px; border: none; border-radius: 50%;
@@ -369,9 +369,9 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 .chat-messages-area { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 
 .chat-messages-header {
-  padding: 12px 20px; border-bottom: 1px solid var(--border-light);
+  padding: 0 20px; border-bottom: 1px solid var(--border-light);
   display: flex; align-items: center; gap: 12px; flex-shrink: 0;
-  background: var(--panel);
+  background: var(--panel); height: 56px;
 }
 .chat-messages-header .chat-name { font-size: 15px; font-weight: 700; }
 .chat-header-info { display: flex; flex-direction: column; min-width: 0; }
@@ -578,8 +578,8 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
   display: flex; flex-direction: column; overflow: hidden;
 }
 .group-panel-header {
-  padding: 10px 16px; border-bottom: 1px solid var(--border-light);
-  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 8px;
+  padding: 0 16px; border-bottom: 1px solid var(--border-light);
+  display: flex; align-items: center; flex-shrink: 0; gap: 8px; height: 56px;
 }
 .group-panel-header h3 { font-size: 14px; font-weight: 700; }
 .group-panel-body { flex: 1; overflow-y: auto; padding: 12px 0; }
