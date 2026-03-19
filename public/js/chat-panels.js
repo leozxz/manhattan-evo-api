@@ -151,6 +151,21 @@ async function forceKnowledgeExtraction() {
   await loadUnifiedPanel();
 }
 
+async function forceRefreshPanel() {
+  const body = document.getElementById('knowledgePanelBody');
+  if (body) body.innerHTML = '<div class="spinner" style="margin-top:40px"></div><p style="text-align:center;color:#888;margin-top:8px;font-size:12px">Analisando com IA...</p>';
+
+  try {
+    await Promise.all([
+      api('POST', '/knowledge/extract/' + currentInstance, { remoteJid: selectedGroup, messageCount: 50 }),
+      api('POST', '/knowledge/tasks/' + currentInstance, { remoteJid: selectedGroup }),
+    ]);
+    toast('Perfil atualizado!');
+  } catch {}
+
+  await loadUnifiedPanel();
+}
+
 async function deleteKnowledge() {
   if (!confirm('Remover todos os dados extraidos deste contato?')) return;
   try {
