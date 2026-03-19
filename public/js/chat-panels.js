@@ -25,29 +25,6 @@ function switchPanelTab(tab) {
 // KNOWLEDGE PANEL (individual chats)
 // =====================
 let showKnowledgePanel = false;
-let currentKnowledgeTab = 'info';
-
-function switchKnowledgeTab(tab) {
-  currentKnowledgeTab = tab;
-  document.querySelectorAll('.knowledge-tab').forEach(t => {
-    t.classList.toggle('active', t.dataset.tab === tab);
-  });
-  if (tab === 'info') loadKnowledgePanel();
-  else if (tab === 'tasks') autoGenerateAndLoadTasks();
-}
-
-async function autoGenerateAndLoadTasks() {
-  const body = document.getElementById('knowledgePanelBody');
-  if (body) body.innerHTML = '<div class="spinner" style="margin-top:40px"></div><p style="text-align:center;color:#888;margin-top:8px;font-size:12px">Analisando conversa...</p>';
-
-  try {
-    await api('POST', '/knowledge/tasks/' + currentInstance, {
-      remoteJid: selectedGroup
-    });
-  } catch {}
-
-  await loadTasksPanel();
-}
 
 const KNOWLEDGE_CATEGORIES = {
   PESSOA: { label: 'Pessoas' },
@@ -67,104 +44,92 @@ async function toggleKnowledgePanel() {
   const panel = document.getElementById('knowledgePanel');
   if (!panel) return;
   panel.style.display = showKnowledgePanel ? 'flex' : 'none';
-  if (showKnowledgePanel) {
-    if (currentKnowledgeTab === 'tasks') loadTasksPanel();
-    else loadKnowledgePanel();
-  }
+  if (showKnowledgePanel) loadUnifiedPanel();
 }
 
-async function loadKnowledgePanel() {
+async function loadUnifiedPanel() {
   const body = document.getElementById('knowledgePanelBody');
   if (!body) return;
   body.innerHTML = '<div class="spinner" style="margin-top:40px"></div>';
 
-  try {
-    const res = await api('GET', '/knowledge/contact/' + currentInstance + '?remoteJid=' + encodeURIComponent(selectedGroup));
-    console.log('[Knowledge] GET contact response:', res.status, JSON.stringify(res.data));
+  // Load knowledge + tasks in parallel, also trigger extraction in background
+  const jid = encodeURIComponent(selectedGroup);
+  const [knowledgeRes, tasksRes] = await Promise.all([
+    api('GET', '/knowledge/contact/' + currentInstance + '?remoteJid=' + jid),
+    api('GET', '/knowledge/tasks/' + currentInstance + '?remoteJid=' + jid),
+  ]);
 
-    if (!res.ok || !res.data) {
-      body.innerHTML = `
-        <div class="knowledge-empty">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="#ccc"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-          <p>Nenhuma informacao extraida ainda.</p>
-          <button class="btn btn-primary btn-sm" onclick="forceKnowledgeExtraction()">Analisar mensagens</button>
-        </div>
-      `;
-      return;
-    }
-
-    const data = res.data;
-    body.innerHTML = '';
-
-    if (data.summary) {
-      const summaryEl = document.createElement('div');
-      summaryEl.className = 'knowledge-section';
-      summaryEl.innerHTML = `
-        <div class="knowledge-summary">${escapeHtml(data.summary)}</div>
-      `;
-      body.appendChild(summaryEl);
-    }
-
-    const grouped = {};
-    (data.entities || []).forEach(e => {
-      if (!grouped[e.category]) grouped[e.category] = [];
-      grouped[e.category].push(e);
+  // Trigger AI refresh in background (sends existing data, only adds new)
+  api('POST', '/knowledge/extract/' + currentInstance, { remoteJid: selectedGroup, messageCount: 50 }).catch(() => {});
+  api('POST', '/knowledge/tasks/' + currentInstance, { remoteJid: selectedGroup }).then(() => {
+    // Reload tasks section after AI finishes
+    api('GET', '/knowledge/tasks/' + currentInstance + '?remoteJid=' + jid).then(r => {
+      if (r.ok && Array.isArray(r.data)) renderTasksInPanel(r.data);
     });
+  }).catch(() => {});
 
-    for (const [cat, entities] of Object.entries(grouped)) {
-      const catInfo = KNOWLEDGE_CATEGORIES[cat] || { label: cat };
-      const section = document.createElement('div');
-      section.className = 'knowledge-section';
-      section.innerHTML = `
-        <div class="knowledge-category-header">
-          <span>${catInfo.label}</span>
-        </div>
-        <div class="knowledge-entities">
-          ${entities.map(e => `
-            <div class="knowledge-entity">
-              <span class="knowledge-entity-label">${escapeHtml(e.label)}</span>
-              <span class="knowledge-entity-value">${escapeHtml(e.value || '')}</span>
-            </div>
-          `).join('')}
-        </div>
-      `;
-      body.appendChild(section);
-    }
+  body.innerHTML = '';
 
-    if (data.relationships && data.relationships.length > 0) {
-      const relSection = document.createElement('div');
-      relSection.className = 'knowledge-section';
-      relSection.innerHTML = `
-        <div class="knowledge-category-header">
-          <span>Relacionamentos</span>
-        </div>
-        <div class="knowledge-entities">
-          ${data.relationships.map(r => `
-            <div class="knowledge-entity">
-              <span class="knowledge-entity-label">${escapeHtml(r.fromEntity?.label || '?')} → ${escapeHtml(r.toEntity?.label || '?')}</span>
-              <span class="knowledge-entity-value">${escapeHtml(r.type)}${r.description ? ' - ' + escapeHtml(r.description) : ''}</span>
-            </div>
-          `).join('')}
-        </div>
-      `;
-      body.appendChild(relSection);
-    }
-
-    const actions = document.createElement('div');
-    actions.className = 'knowledge-actions';
-    actions.innerHTML = `
-      <button class="btn btn-primary btn-sm" onclick="forceKnowledgeExtraction()" style="width:100%">Reanalisar mensagens</button>
-      <button class="btn btn-secondary btn-sm" onclick="deleteKnowledge()" style="width:100%;margin-top:6px">Limpar dados</button>
-    `;
-    body.appendChild(actions);
-  } catch (err) {
-    body.innerHTML = `
-      <div class="knowledge-empty">
-        <p>Erro ao carregar dados.</p>
-        <button class="btn btn-primary btn-sm" onclick="loadKnowledgePanel()">Tentar novamente</button>
-      </div>
-    `;
+  // === SUMMARY ===
+  const data = knowledgeRes.ok ? knowledgeRes.data : null;
+  if (data && data.summary) {
+    const summaryEl = document.createElement('div');
+    summaryEl.className = 'knowledge-section';
+    summaryEl.innerHTML = '<div class="knowledge-summary">' + escapeHtml(data.summary) + '</div>';
+    body.appendChild(summaryEl);
   }
+
+  // === TASKS ===
+  const tasksHeader = document.createElement('div');
+  tasksHeader.className = 'knowledge-category-header';
+  tasksHeader.innerHTML = '<span>Tarefas</span>';
+  body.appendChild(tasksHeader);
+
+  const taskContainer = document.createElement('div');
+  taskContainer.id = 'taskListContainer';
+  body.appendChild(taskContainer);
+
+  const tasks = tasksRes.ok && Array.isArray(tasksRes.data) ? tasksRes.data : [];
+  renderTasksInPanel(tasks);
+}
+
+function renderTasksInPanel(tasks) {
+  _taskCache = tasks;
+  const container = document.getElementById('taskListContainer');
+  if (!container) return;
+
+  if (tasks.length === 0) {
+    container.innerHTML = '<div style="padding:12px 16px;text-align:center;color:var(--text-muted);font-size:12px">Nenhuma tarefa pendente</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  const taskList = document.createElement('div');
+  taskList.className = 'task-list';
+
+  tasks.forEach(task => {
+    const priorityColors = { alta: '#ef4444', media: '#f59e0b', baixa: '#3b82f6' };
+    const color = priorityColors[task.priority] || '#9ca3af';
+    const isNew = task.status === 'nova';
+
+    const card = document.createElement('div');
+    card.className = 'task-card';
+    card.dataset.taskId = task.id;
+    card.onclick = () => openTaskModal(task.id);
+
+    card.innerHTML = '<div class="task-priority-bar" style="background:' + color + '"></div>' +
+      '<div class="task-card-body">' +
+        '<div class="task-card-row">' +
+          '<button class="task-complete-btn" onclick="event.stopPropagation();completeTask(\'' + task.id + '\')" title="Concluir"><span class="task-check-circle"></span></button>' +
+          '<div class="task-title">' + escapeHtml(task.title) + '</div>' +
+          '<button class="task-x-btn" onclick="event.stopPropagation();rejectTask(\'' + task.id + '\')" title="Remover"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>' +
+        '</div>' +
+        (isNew ? '<div class="task-new-actions"><button class="task-accept-btn" onclick="event.stopPropagation();acceptTask(\'' + task.id + '\')">Aceitar</button><button class="task-reject-btn" onclick="event.stopPropagation();rejectTask(\'' + task.id + '\')">Recusar</button></div>' : '') +
+      '</div>';
+    taskList.appendChild(card);
+  });
+
+  container.appendChild(taskList);
 }
 
 async function forceKnowledgeExtraction() {
@@ -172,37 +137,22 @@ async function forceKnowledgeExtraction() {
   if (body) body.innerHTML = '<div class="spinner" style="margin-top:40px"></div><p style="text-align:center;color:#888;margin-top:8px;font-size:12px">Analisando mensagens com IA...</p>';
 
   try {
-    const res = await api('POST', '/knowledge/extract/' + currentInstance, {
-      remoteJid: selectedGroup,
-      messageCount: 50
-    });
-
-    console.log('[Knowledge] Extract response:', res.status, JSON.stringify(res.data));
-
-    if (res.ok) {
-      toast('Analise concluida!', 'success');
-    } else {
-      console.error('[Knowledge] Extract failed:', res.status, res.data);
-      toast('Falha na analise (HTTP ' + res.status + '): ' + (res.data?.error || res.data?.message || JSON.stringify(res.data)), 'error');
-    }
+    await api('POST', '/knowledge/extract/' + currentInstance, { remoteJid: selectedGroup, messageCount: 50 });
+    toast('Analise concluida!');
   } catch (err) {
-    console.error('[Knowledge] Extract error:', err);
     toast('Erro na analise: ' + err.message, 'error');
   }
 
-  await loadKnowledgePanel();
+  await loadUnifiedPanel();
 }
 
 async function deleteKnowledge() {
   if (!confirm('Remover todos os dados extraidos deste contato?')) return;
-
   try {
     await api('DELETE', '/knowledge/contact/' + currentInstance + '?remoteJid=' + encodeURIComponent(selectedGroup));
-    toast('Dados removidos', 'success');
-    await loadKnowledgePanel();
-  } catch {
-    toast('Erro ao remover', 'error');
-  }
+    toast('Dados removidos');
+    await loadUnifiedPanel();
+  } catch { toast('Erro ao remover', 'error'); }
 }
 
 // =====================

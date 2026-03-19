@@ -141,10 +141,6 @@ async function selectGroup(chat, el) {
             <button class="btn btn-secondary btn-sm" onclick="toggleKnowledgePanel()">&times;</button>
           </div>
         </div>
-        <div class="knowledge-tabs">
-          <button class="knowledge-tab active" data-tab="info" onclick="switchKnowledgeTab('info')">Informacoes</button>
-          <button class="knowledge-tab" data-tab="tasks" onclick="switchKnowledgeTab('tasks')">Tasks</button>
-        </div>
         <div class="group-panel-body" id="knowledgePanelBody">
           <div class="spinner" style="margin-top:40px"></div>
         </div>
@@ -171,6 +167,8 @@ async function selectGroup(chat, el) {
   if (isGroup) loadCachedParticipants();
   else {
     showKnowledgePanel = false;
+    // Auto-load knowledge + tasks in background
+    loadUnifiedPanel();
   }
   renderPinnedBanner();
   startMsgPolling();

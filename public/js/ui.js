@@ -86,6 +86,17 @@ function showPage(name) {
   const titles = { connect: 'Conexoes', group: 'Criar Grupo', chat: 'Mensagens', dashboard: 'Dashboard' };
   document.getElementById('pageTitle').textContent = titles[name];
 
+  // Chat page uses fullscreen (hide header, expand content)
+  const header = document.querySelector('.header');
+  const content = document.querySelector('.content');
+  if (name === 'chat') {
+    if (header) header.style.display = 'none';
+    if (content) content.classList.add('content-fullscreen');
+  } else {
+    if (header) header.style.display = '';
+    if (content) content.classList.remove('content-fullscreen');
+  }
+
   if (name === 'connect') renderInstances();
   if (name === 'group') updateGroupInstanceSelect();
   if (name === 'chat') {
