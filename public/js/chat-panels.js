@@ -25,6 +25,16 @@ function switchPanelTab(tab) {
 // KNOWLEDGE PANEL (individual chats)
 // =====================
 let showKnowledgePanel = false;
+let currentKnowledgeTab = 'info';
+
+function switchKnowledgeTab(tab) {
+  currentKnowledgeTab = tab;
+  document.querySelectorAll('.knowledge-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  if (tab === 'info') loadKnowledgePanel();
+  else if (tab === 'tasks') loadTasksPanel();
+}
 
 const KNOWLEDGE_CATEGORIES = {
   PESSOA: { label: 'Pessoas' },
@@ -44,7 +54,10 @@ async function toggleKnowledgePanel() {
   const panel = document.getElementById('knowledgePanel');
   if (!panel) return;
   panel.style.display = showKnowledgePanel ? 'flex' : 'none';
-  if (showKnowledgePanel) loadKnowledgePanel();
+  if (showKnowledgePanel) {
+    if (currentKnowledgeTab === 'tasks') loadTasksPanel();
+    else loadKnowledgePanel();
+  }
 }
 
 async function loadKnowledgePanel() {
@@ -176,6 +189,125 @@ async function deleteKnowledge() {
     await loadKnowledgePanel();
   } catch {
     toast('Erro ao remover', 'error');
+  }
+}
+
+// =====================
+// TASKS PANEL
+// =====================
+async function loadTasksPanel() {
+  const body = document.getElementById('knowledgePanelBody');
+  if (!body) return;
+  body.innerHTML = '<div class="spinner" style="margin-top:40px"></div>';
+
+  try {
+    const res = await api('GET', '/knowledge/tasks/' + currentInstance + '?remoteJid=' + encodeURIComponent(selectedGroup));
+
+    if (!res.ok || !Array.isArray(res.data) || res.data.length === 0) {
+      body.innerHTML = `
+        <div class="knowledge-empty">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="#ccc"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2z"/></svg>
+          <p>Nenhuma tarefa encontrada.</p>
+          <button class="btn btn-primary btn-sm" onclick="extractTasks()">Gerar tarefas com IA</button>
+        </div>
+      `;
+      return;
+    }
+
+    body.innerHTML = '';
+
+    const taskList = document.createElement('div');
+    taskList.className = 'task-list';
+
+    res.data.forEach(task => {
+      const card = document.createElement('div');
+      card.className = 'task-card' + (task.status === 'concluida' ? ' task-done' : '');
+      card.dataset.taskId = task.id;
+
+      const priorityColors = { alta: '#ef4444', media: '#f59e0b', baixa: '#3b82f6' };
+      const priorityLabels = { alta: 'Alta', media: 'Media', baixa: 'Baixa' };
+      const color = priorityColors[task.priority] || '#9ca3af';
+
+      card.innerHTML = `
+        <div class="task-card-header">
+          <label class="task-checkbox" title="Marcar como ${task.status === 'concluida' ? 'pendente' : 'concluida'}">
+            <input type="checkbox" ${task.status === 'concluida' ? 'checked' : ''} onchange="toggleTaskStatus('${task.id}', this.checked)">
+            <span class="task-check-icon"></span>
+          </label>
+          <div class="task-card-content">
+            <div class="task-title">${escapeHtml(task.title)}</div>
+            ${task.description ? '<div class="task-desc">' + escapeHtml(task.description) + '</div>' : ''}
+          </div>
+          <button class="task-delete" onclick="deleteTaskItem('${task.id}')" title="Remover">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="#9ca3af"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </div>
+        <div class="task-card-footer">
+          <span class="task-priority" style="color:${color}; border-color:${color}">${priorityLabels[task.priority] || task.priority}</span>
+          ${task.dueDate ? '<span class="task-due">' + escapeHtml(task.dueDate) + '</span>' : ''}
+        </div>
+      `;
+      taskList.appendChild(card);
+    });
+
+    body.appendChild(taskList);
+
+    const actions = document.createElement('div');
+    actions.className = 'knowledge-actions';
+    actions.innerHTML = '<button class="btn btn-primary btn-sm" onclick="extractTasks()" style="width:100%">Regerar tarefas com IA</button>';
+    body.appendChild(actions);
+  } catch (err) {
+    body.innerHTML = `
+      <div class="knowledge-empty">
+        <p>Erro ao carregar tarefas.</p>
+        <button class="btn btn-primary btn-sm" onclick="loadTasksPanel()">Tentar novamente</button>
+      </div>
+    `;
+  }
+}
+
+async function extractTasks() {
+  const body = document.getElementById('knowledgePanelBody');
+  if (body) body.innerHTML = '<div class="spinner" style="margin-top:40px"></div><p style="text-align:center;color:#888;margin-top:8px;font-size:12px">Gerando tarefas com IA...</p>';
+
+  try {
+    const res = await api('POST', '/knowledge/tasks/' + currentInstance, {
+      remoteJid: selectedGroup
+    });
+
+    if (res.ok) {
+      toast('Tarefas geradas!');
+    } else {
+      toast('Falha ao gerar tarefas', 'error');
+    }
+  } catch (err) {
+    toast('Erro: ' + err.message, 'error');
+  }
+
+  await loadTasksPanel();
+}
+
+async function toggleTaskStatus(taskId, done) {
+  try {
+    await api('PUT', '/knowledge/task/' + currentInstance, {
+      taskId,
+      status: done ? 'concluida' : 'pendente'
+    });
+    // Update card visually
+    const card = document.querySelector('.task-card[data-task-id="' + taskId + '"]');
+    if (card) card.classList.toggle('task-done', done);
+  } catch {
+    toast('Erro ao atualizar tarefa', 'error');
+  }
+}
+
+async function deleteTaskItem(taskId) {
+  try {
+    await api('DELETE', '/knowledge/task/' + currentInstance + '?taskId=' + taskId);
+    const card = document.querySelector('.task-card[data-task-id="' + taskId + '"]');
+    if (card) { card.style.opacity = '0'; setTimeout(() => card.remove(), 200); }
+  } catch {
+    toast('Erro ao remover tarefa', 'error');
   }
 }
 

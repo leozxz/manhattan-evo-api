@@ -64,9 +64,23 @@ async function initTables() {
       "createdAt" TIMESTAMP DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS "ContactTask" (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "contactKnowledgeId" TEXT NOT NULL REFERENCES "ContactKnowledge"(id) ON DELETE CASCADE,
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      priority VARCHAR(20) DEFAULT 'media',
+      status VARCHAR(20) DEFAULT 'pendente',
+      "dueDate" VARCHAR(50),
+      "createdAt" TIMESTAMP DEFAULT NOW(),
+      "updatedAt" TIMESTAMP DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_ke_contact ON "KnowledgeEntity"("contactKnowledgeId");
     CREATE INDEX IF NOT EXISTS idx_ke_category ON "KnowledgeEntity"(category);
     CREATE INDEX IF NOT EXISTS idx_kr_contact ON "KnowledgeRelationship"("contactKnowledgeId");
+    CREATE INDEX IF NOT EXISTS idx_ct_contact ON "ContactTask"("contactKnowledgeId");
+    CREATE INDEX IF NOT EXISTS idx_ct_status ON "ContactTask"(status);
   `);
   console.log('[Knowledge] Tables initialized');
 }
@@ -123,6 +137,34 @@ Responda SOMENTE com JSON valido no seguinte formato:
   ],
   "summary": "Resumo atualizado do perfil do cliente"
 }`;
+
+const TASK_EXTRACTION_PROMPT = `Voce e um assistente que analisa conversas de WhatsApp e identifica tarefas/acoes pendentes para o atendente executar em relacao ao cliente.
+
+Analise as mensagens e extraia TAREFAS ACIONAVEIS que o atendente deveria fazer. Exemplos:
+- Cliente pediu um documento → tarefa "Enviar documento X"
+- Cliente mencionou interesse em produto → tarefa "Apresentar produto Y"
+- Cliente tem duvida pendente → tarefa "Responder sobre Z"
+- Cliente agendou algo → tarefa "Confirmar agendamento para data"
+- Cliente reclamou de algo → tarefa "Resolver reclamacao sobre W"
+- Follow-up necessario → tarefa "Fazer follow-up sobre assunto"
+
+REGRAS:
+1. Extraia APENAS tarefas reais baseadas no conteudo das mensagens.
+2. Prioridade: "alta" (urgente/reclamacao), "media" (pedido normal), "baixa" (follow-up/lembrete).
+3. Inclua data limite se mencionada ou inferivel na conversa.
+4. Maximo 8 tarefas. Foque nas mais relevantes e recentes.
+5. Nao crie tarefas para coisas ja resolvidas na conversa.
+
+MENSAGENS RECENTES:
+{messages}
+
+Responda SOMENTE com JSON valido:
+{
+  "tasks": [
+    {"title": "titulo curto da tarefa", "description": "detalhes e contexto", "priority": "alta|media|baixa", "dueDate": "data se aplicavel ou null"}
+  ]
+}`;
+
 
 function callOpenAI(prompt) {
   return new Promise((resolve, reject) => {
@@ -268,12 +310,8 @@ async function saveExtraction(db, instanceId, remoteJid, pushName, extraction) {
   return contactId;
 }
 
-async function extractFromMessages(instanceId, instanceName, remoteJid, messageCount) {
+async function fetchMessagesFromDB(instanceId, instanceName, remoteJid, limit) {
   const db = getPool();
-  const limit = messageCount || 50;
-
-  // Query messages directly from PostgreSQL — handles LID and phone JIDs
-  // The key column is JSONB, so we search key->>'remoteJid' with multiple variants
   const rawNum = remoteJid.split('@')[0];
   const jidVariants = [remoteJid];
   if (remoteJid.includes('@lid')) jidVariants.push(rawNum + '@s.whatsapp.net');
@@ -288,7 +326,7 @@ async function extractFromMessages(instanceId, instanceName, remoteJid, messageC
       AND key->>'remoteJid' = ANY($2)
     ORDER BY "messageTimestamp" DESC
     LIMIT $3
-  `, [instanceId, jidVariants, limit]);
+  `, [instanceId, jidVariants, limit || 50]);
 
   console.log('[Knowledge] Found', result.rows.length, 'messages in DB');
 
@@ -296,7 +334,11 @@ async function extractFromMessages(instanceId, instanceName, remoteJid, messageC
     throw new Error('No messages found for ' + remoteJid + ' (DB query, variants: ' + jidVariants.join(', ') + ')');
   }
 
-  const messages = result.rows;
+  return result.rows;
+}
+
+async function extractFromMessages(instanceId, instanceName, remoteJid, messageCount) {
+  const messages = await fetchMessagesFromDB(instanceId, instanceName, remoteJid, messageCount || 50);
 
   // Extract text from messages
   const texts = messages
@@ -404,6 +446,104 @@ async function deleteContactKnowledge(instanceId, remoteJid) {
 }
 
 // =====================
+// TASKS — AI-generated from conversation
+// =====================
+async function extractTasks(instanceId, instanceName, remoteJid) {
+  const db = getPool();
+
+  // Ensure ContactKnowledge exists
+  let ck = await db.query(
+    'SELECT id FROM "ContactKnowledge" WHERE "remoteJid" = $1 AND "instanceId" = $2',
+    [remoteJid, instanceId]
+  );
+  if (ck.rows.length === 0) {
+    await db.query(
+      'INSERT INTO "ContactKnowledge" ("remoteJid", "instanceId") VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [remoteJid, instanceId]
+    );
+    ck = await db.query(
+      'SELECT id FROM "ContactKnowledge" WHERE "remoteJid" = $1 AND "instanceId" = $2',
+      [remoteJid, instanceId]
+    );
+  }
+  const contactKnowledgeId = ck.rows[0].id;
+
+  // Fetch messages
+  const messages = await fetchMessagesFromDB(instanceId, instanceName, remoteJid);
+  if (messages.length === 0) throw new Error('Nenhuma mensagem encontrada');
+
+  const msgText = messages.map(m => {
+    const sender = m.key?.fromMe ? 'Atendente' : (m.pushName || 'Cliente');
+    const text = m.message?.conversation || m.message?.extendedTextMessage?.text || '';
+    return sender + ': ' + text;
+  }).filter(l => l.includes(': ') && l.split(': ')[1]).join('\n');
+
+  const prompt = TASK_EXTRACTION_PROMPT.replace('{messages}', msgText);
+  const result = await callOpenAI(prompt);
+
+  if (!result.tasks || !Array.isArray(result.tasks)) return [];
+
+  // Clear old AI-generated tasks (keep manually edited ones)
+  await db.query(
+    'DELETE FROM "ContactTask" WHERE "contactKnowledgeId" = $1',
+    [contactKnowledgeId]
+  );
+
+  // Insert new tasks
+  for (const task of result.tasks.slice(0, 8)) {
+    await db.query(
+      `INSERT INTO "ContactTask" ("contactKnowledgeId", title, description, priority, "dueDate")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [contactKnowledgeId, task.title, task.description || '', task.priority || 'media', task.dueDate || null]
+    );
+  }
+
+  return getContactTasks(instanceId, remoteJid);
+}
+
+async function getContactTasks(instanceId, remoteJid) {
+  const db = getPool();
+  const result = await db.query(`
+    SELECT ct.* FROM "ContactTask" ct
+    JOIN "ContactKnowledge" ck ON ct."contactKnowledgeId" = ck.id
+    WHERE ck."remoteJid" = $1 AND ck."instanceId" = $2
+    ORDER BY
+      CASE ct.priority WHEN 'alta' THEN 0 WHEN 'media' THEN 1 WHEN 'baixa' THEN 2 ELSE 3 END,
+      ct."createdAt" DESC
+  `, [remoteJid, instanceId]);
+  return result.rows;
+}
+
+async function updateTask(taskId, updates) {
+  const db = getPool();
+  const fields = [];
+  const values = [];
+  let idx = 1;
+
+  if (updates.status !== undefined) { fields.push('"status" = $' + idx++); values.push(updates.status); }
+  if (updates.title !== undefined) { fields.push('title = $' + idx++); values.push(updates.title); }
+  if (updates.description !== undefined) { fields.push('description = $' + idx++); values.push(updates.description); }
+  if (updates.priority !== undefined) { fields.push('priority = $' + idx++); values.push(updates.priority); }
+
+  if (fields.length === 0) return null;
+
+  fields.push('"updatedAt" = NOW()');
+  values.push(taskId);
+
+  const result = await db.query(
+    'UPDATE "ContactTask" SET ' + fields.join(', ') + ' WHERE id = $' + idx + ' RETURNING *',
+    values
+  );
+  return result.rows[0] || null;
+}
+
+async function deleteTask(taskId) {
+  const db = getPool();
+  await db.query('DELETE FROM "ContactTask" WHERE id = $1', [taskId]);
+  return { deleted: true };
+}
+
+// =====================
 // RESOLVE INSTANCE ID (from Evolution API)
 // =====================
 async function resolveInstanceId(instanceName) {
@@ -500,6 +640,36 @@ async function handleRequest(req, res, urlPath, fullApiPath) {
     if (req.method === 'DELETE' && action === 'contact') {
       if (!query.remoteJid) return json(400, { error: 'remoteJid query param required' });
       const result = await deleteContactKnowledge(instanceId, query.remoteJid);
+      return json(200, result);
+    }
+
+    // GET /knowledge/tasks/:instanceName?remoteJid=...
+    if (req.method === 'GET' && action === 'tasks') {
+      if (!query.remoteJid) return json(400, { error: 'remoteJid query param required' });
+      const tasks = await getContactTasks(instanceId, query.remoteJid);
+      return json(200, tasks);
+    }
+
+    // POST /knowledge/tasks/extract/:instanceName  body: { remoteJid }
+    if (req.method === 'POST' && action === 'tasks') {
+      const body = await readBody(req);
+      if (!body.remoteJid) return json(400, { error: 'remoteJid is required in body' });
+      const tasks = await extractTasks(instanceId, instanceName, body.remoteJid);
+      return json(200, tasks);
+    }
+
+    // PUT /knowledge/task/:instanceName  body: { taskId, status?, title?, priority? }
+    if (req.method === 'PUT' && action === 'task') {
+      const body = await readBody(req);
+      if (!body.taskId) return json(400, { error: 'taskId is required' });
+      const task = await updateTask(body.taskId, body);
+      return json(200, task);
+    }
+
+    // DELETE /knowledge/task/:instanceName?taskId=...
+    if (req.method === 'DELETE' && action === 'task') {
+      if (!query.taskId) return json(400, { error: 'taskId query param required' });
+      const result = await deleteTask(query.taskId);
       return json(200, result);
     }
 
