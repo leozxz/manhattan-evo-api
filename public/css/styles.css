@@ -650,7 +650,12 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 .graph-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 700; flex-shrink: 0; }
 .graph-modal-body { flex: 1; position: relative; overflow: hidden; }
 .graph-modal-body canvas { width: 100%; height: 100%; display: block; }
-.graph-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 10px 20px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.graph-ai-bar {
+  display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+  border-top: 1px solid var(--border); flex-shrink: 0; background: var(--panel-alt);
+}
+.graph-ai-bar input::placeholder { color: var(--text-muted); }
+.graph-legend { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 20px; border-top: 1px solid var(--border); flex-shrink: 0; }
 .graph-legend-item {
   display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted);
   padding: 4px 10px; border-radius: 6px; transition: all 0.15s; user-select: none;

@@ -28,7 +28,7 @@ const { isRateLimited } = require('./middleware/rateLimit');
 
 // Routes
 const { handleWebhook } = require('./routes/webhook');
-const { handleAiSuggest } = require('./routes/ai');
+const { handleAiSuggest, handleAiGraphQuery } = require('./routes/ai');
 const { serveStatic } = require('./routes/static');
 const knowledge = require('./knowledge');
 
@@ -176,6 +176,16 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
       return;
     }
     return handleAiSuggest(req, res, SECURITY_HEADERS);
+  }
+
+  // AI graph query
+  if (req.method === 'POST' && urlPath === '/ai/graph-query') {
+    if (await isRateLimited(ip)) {
+      res.writeHead(429, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: 'Too many requests' }));
+      return;
+    }
+    return handleAiGraphQuery(req, res, SECURITY_HEADERS);
   }
 
   // Knowledge graph
