@@ -23,7 +23,7 @@ const redis = require('./services/redis');
 const { evoRequest } = require('./services/evolution');
 
 // Middleware
-const { checkAuth, handleLogin, handleLogout, seedAdmin, hashPassword } = require('./middleware/auth');
+const { checkAuth, handleLogin, handleVerify, handleResend, handleLogout, seedAdmin, hashPassword } = require('./middleware/auth');
 const { isRateLimited } = require('./middleware/rateLimit');
 
 // Routes
@@ -86,6 +86,16 @@ http.createServer((req, res) => {
     return handleLogin(req, res, SECURITY_HEADERS);
   }
 
+  // 2FA verify (no auth — user is mid-login)
+  if (req.method === 'POST' && urlPath === '/auth/verify') {
+    return handleVerify(req, res, SECURITY_HEADERS);
+  }
+
+  // 2FA resend (no auth — user is mid-login)
+  if (req.method === 'POST' && urlPath === '/auth/resend') {
+    return handleResend(req, res, SECURITY_HEADERS);
+  }
+
   // Logout (no auth check needed)
   if (req.method === 'GET' && urlPath === '/auth/logout') {
     return handleLogout(req, res, SECURITY_HEADERS);
@@ -143,7 +153,7 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
       req.on('data', c => { if (body.length < 4096) body += c; });
       req.on('end', async () => {
         try {
-          const { username, password, name } = JSON.parse(body);
+          const { username, password, name, email, phone } = JSON.parse(body);
           if (!username || !password) {
             res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
             res.end(JSON.stringify({ error: 'username and password required' }));
@@ -153,11 +163,11 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
           const db = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
           const hash = await hashPassword(password);
           const result = await db.query(
-            `INSERT INTO "PanelUser" (username, "passwordHash", name, role)
-             VALUES ($1, $2, $3, 'admin')
-             ON CONFLICT (username) DO UPDATE SET "passwordHash" = $2, name = $3, "updatedAt" = NOW()
-             RETURNING id, username, name, role, "createdAt"`,
-            [username, hash, name || username]
+            `INSERT INTO "PanelUser" (username, "passwordHash", name, role, email, phone)
+             VALUES ($1, $2, $3, 'admin', $4, $5)
+             ON CONFLICT (username) DO UPDATE SET "passwordHash" = $2, name = $3, email = COALESCE($4, "PanelUser".email), phone = COALESCE($5, "PanelUser".phone), "updatedAt" = NOW()
+             RETURNING id, username, name, role, email, phone, "createdAt"`,
+            [username, hash, name || username, email || null, phone || null]
           );
           await db.end();
           res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });

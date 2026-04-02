@@ -108,11 +108,20 @@ async function initTables() {
       username VARCHAR(100) NOT NULL UNIQUE,
       "passwordHash" TEXT NOT NULL,
       name VARCHAR(200),
+      email VARCHAR(255),
+      phone VARCHAR(20),
       role VARCHAR(20) NOT NULL DEFAULT 'admin',
       active BOOLEAN NOT NULL DEFAULT true,
       "createdAt" TIMESTAMP DEFAULT NOW(),
       "updatedAt" TIMESTAMP DEFAULT NOW()
     );
+
+    -- Add email/phone columns if table already exists
+    DO $$ BEGIN
+      ALTER TABLE "PanelUser" ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+      ALTER TABLE "PanelUser" ADD COLUMN IF NOT EXISTS phone VARCHAR(20);
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
   `);
   console.log('[Knowledge] Tables initialized');
 }
