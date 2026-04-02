@@ -76,6 +76,53 @@ function ensureConnected() {
   return true;
 }
 
+// =====================
+// USER ROLE & PERMISSIONS
+// =====================
+let currentUserRole = 'user';
+const ADMIN_PAGES = ['connect', 'group', 'dashboard'];
+
+async function loadCurrentUser() {
+  try {
+    const res = await fetch('/api/me');
+    if (res.ok) {
+      const data = await res.json();
+      currentUserRole = data.role || 'user';
+    }
+  } catch {}
+  applyPermissions();
+}
+
+function applyPermissions() {
+  const isAdmin = currentUserRole === 'admin';
+  const btns = document.querySelectorAll('.sidebar-btn');
+  const pages = ['connect', 'group', 'chat', 'dashboard'];
+
+  pages.forEach((page, i) => {
+    const btn = btns[i];
+    if (!btn) return;
+    if (ADMIN_PAGES.includes(page) && !isAdmin) {
+      btn.classList.add('locked');
+      // Add lock icon if not already there
+      if (!btn.querySelector('.lock-icon')) {
+        const lock = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        lock.setAttribute('viewBox', '0 0 24 24');
+        lock.setAttribute('class', 'lock-icon');
+        lock.innerHTML = '<path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z"/>';
+        btn.appendChild(lock);
+      }
+    } else {
+      btn.classList.remove('locked');
+      const lock = btn.querySelector('.lock-icon');
+      if (lock) lock.remove();
+    }
+  });
+
+  // Show/hide manage users in menu
+  const manageBtn = document.getElementById('menuManageUsers');
+  if (manageBtn) manageBtn.style.display = isAdmin ? '' : 'none';
+}
+
 // User menu toggle
 function toggleUserMenu() {
   const menu = document.getElementById('sidebarUserMenu');
@@ -87,7 +134,63 @@ document.addEventListener('mousedown', function(e) {
   if (wrap && menu && !wrap.contains(e.target)) menu.classList.remove('open');
 });
 
+// =====================
+// USER MANAGER (admin)
+// =====================
+function openUserManager() {
+  document.getElementById('sidebarUserMenu').classList.remove('open');
+  document.getElementById('userManagerOverlay').style.display = 'flex';
+  loadUserList();
+}
+
+function closeUserManager() {
+  document.getElementById('userManagerOverlay').style.display = 'none';
+}
+
+async function loadUserList() {
+  const body = document.getElementById('userManagerBody');
+  try {
+    const res = await fetch('/api/users');
+    if (!res.ok) throw new Error('Erro ao carregar');
+    const users = await res.json();
+    const active = users.filter(u => u.active);
+    let html = '<p class="user-count">' + active.length + ' usuario' + (active.length !== 1 ? 's' : '') + ' ativo' + (active.length !== 1 ? 's' : '') + '</p>';
+    users.forEach(u => {
+      const initials = (u.name || u.username || '?').charAt(0).toUpperCase();
+      const badgeClass = u.role === 'admin' ? 'admin' : 'user';
+      const badgeLabel = u.role === 'admin' ? 'Admin' : 'Usuario';
+      const toggleLabel = u.role === 'admin' ? 'Tornar usuario' : 'Tornar admin';
+      const newRole = u.role === 'admin' ? 'user' : 'admin';
+      const inactive = u.active ? '' : ' style="opacity:0.5"';
+      html += '<div class="user-row"' + inactive + '>' +
+        '<div class="user-avatar"><span style="color:#9ca3af;font-size:14px;font-weight:600">' + initials + '</span></div>' +
+        '<div class="user-info"><div class="user-name">' + (u.name || u.username) + (!u.active ? ' <span style="color:#ef4444;font-size:10px">(inativo)</span>' : '') + '</div>' +
+        '<div class="user-email">' + (u.email || u.username) + '</div></div>' +
+        '<span class="user-badge ' + badgeClass + '">' + badgeLabel + '</span>' +
+        '<button class="role-toggle" onclick="toggleRole(\'' + u.id + '\',\'' + newRole + '\')">' + toggleLabel + '</button>' +
+        '</div>';
+    });
+    body.innerHTML = html;
+  } catch (err) {
+    body.innerHTML = '<p style="color:#ef4444;text-align:center;padding:20px">Erro ao carregar usuarios</p>';
+  }
+}
+
+async function toggleRole(userId, newRole) {
+  try {
+    const res = await fetch('/api/users/' + userId + '/role', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: newRole })
+    });
+    if (res.ok) loadUserList();
+    else alert('Erro ao alterar permissao');
+  } catch { alert('Erro de conexao'); }
+}
+
 function showPage(name) {
+  // Block non-admin pages
+  if (ADMIN_PAGES.includes(name) && currentUserRole !== 'admin') return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');

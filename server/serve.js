@@ -152,9 +152,59 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
     return;
   }
 
+  // Current user info
+  if (req.method === 'GET' && urlPath === '/api/me') {
+    const user = req.user || {};
+    res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+    res.end(JSON.stringify({ userId: user.userId, username: user.username, role: user.role }));
+    return;
+  }
+
   // User management (admin only)
-  if (urlPath === '/api/users') {
-    if (req.method === 'POST') {
+  if (urlPath === '/api/users' || urlPath.startsWith('/api/users/')) {
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (!isAdmin) {
+      res.writeHead(403, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: 'Admin access required' }));
+      return;
+    }
+
+    // PATCH /api/users/:id/role — toggle role
+    const roleMatch = urlPath.match(/^\/api\/users\/([^/]+)\/role$/);
+    if (req.method === 'PATCH' && roleMatch) {
+      let body = '';
+      req.on('data', c => { if (body.length < 1024) body += c; });
+      req.on('end', async () => {
+        try {
+          const { role } = JSON.parse(body);
+          if (role !== 'admin' && role !== 'user') {
+            res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+            res.end(JSON.stringify({ error: 'role must be admin or user' }));
+            return;
+          }
+          const { Pool } = require('pg');
+          const db = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+          const result = await db.query(
+            'UPDATE "PanelUser" SET role = $1, "updatedAt" = NOW() WHERE id = $2 RETURNING id, username, name, role, email, active',
+            [role, roleMatch[1]]
+          );
+          await db.end();
+          if (result.rows.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+            res.end(JSON.stringify({ error: 'User not found' }));
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+          res.end(JSON.stringify(result.rows[0]));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && urlPath === '/api/users') {
       let body = '';
       req.on('data', c => { if (body.length < 4096) body += c; });
       req.on('end', async () => {
@@ -185,11 +235,11 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
       });
       return;
     }
-    if (req.method === 'GET') {
+    if (req.method === 'GET' && urlPath === '/api/users') {
       try {
         const { Pool } = require('pg');
         const db = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
-        const result = await db.query('SELECT id, username, name, role, active, "createdAt" FROM "PanelUser" ORDER BY "createdAt"');
+        const result = await db.query('SELECT id, username, name, role, email, active, "createdAt" FROM "PanelUser" ORDER BY "createdAt"');
         await db.end();
         res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
         res.end(JSON.stringify(result.rows));

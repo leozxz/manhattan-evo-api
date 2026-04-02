@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WhatsApp Manager</title>
   <link rel="icon" type="image/png" href="favicon.png">
-  <link rel="stylesheet" href="css/styles.css?v=21">
+  <link rel="stylesheet" href="css/styles.css?v=22">
 </head>
 <body>
 
@@ -34,6 +34,10 @@
         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
       </button>
       <div class="sidebar-user-menu" id="sidebarUserMenu">
+        <button id="menuManageUsers" onclick="openUserManager()" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-7 7v-1c0-2.67 5.33-4 7-4s7 1.33 7 4v1H5zm9.75-9.75l1.41-1.41L13.34 5l-1.41 1.41 2.82 2.84zM17.5 12h2v2h-2v-2zm0-4h2v2h-2V8zm-4 8h2v2h-2v-2z"/></svg>
+          Gerenciar usuarios
+        </button>
         <button onclick="window.location.href='/auth/logout'">
           <svg viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
           Sair
@@ -41,6 +45,19 @@
       </div>
     </div>
   </nav>
+
+  <!-- User Manager Modal -->
+  <div class="modal-overlay" id="userManagerOverlay" style="display:none" onclick="if(event.target===this)closeUserManager()">
+    <div class="modal-box" style="max-width:520px">
+      <div class="modal-header">
+        <h3>Gerenciar Usuarios</h3>
+        <button class="modal-close" onclick="closeUserManager()">&times;</button>
+      </div>
+      <div class="modal-body" id="userManagerBody">
+        <p style="color:#667781;text-align:center;padding:20px">Carregando...</p>
+      </div>
+    </div>
+  </div>
 
   <!-- Main -->
   <div class="main">
@@ -195,7 +212,7 @@
     </div>
   </div>
 
-  <script src="js/ui.js?v=21"></script>
+  <script src="js/ui.js?v=22"></script>
   <script src="js/instances.js?v=20"></script>
   <script src="js/groups.js?v=20"></script>
   <script src="js/chat-core.js?v=20"></script>
@@ -207,7 +224,7 @@
   <script src="js/chat-graph.js?v=20"></script>
   <script src="js/chat-search.js?v=20"></script>
   <script src="js/chat-ai.js?v=20"></script>
-  <script src="js/chat-init.js?v=20"></script>
+  <script src="js/chat-init.js?v=22"></script>
   <script src="js/dashboard.js?v=20"></script>
 </body>
 </html>

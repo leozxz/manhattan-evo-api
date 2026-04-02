@@ -37,6 +37,7 @@ function configureWebhook(instName) {
 // INIT
 // =====================
 async function init() {
+  await loadCurrentUser();
   const res = await api('GET', '/instance/fetchInstances');
   const rd = res.ok ? res.data : null;
   if (rd && Array.isArray(rd)) {
