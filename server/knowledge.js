@@ -102,6 +102,17 @@ async function initTables() {
     CREATE INDEX IF NOT EXISTS idx_kr_contact ON "KnowledgeRelationship"("contactKnowledgeId");
     CREATE INDEX IF NOT EXISTS idx_ct_contact ON "ContactTask"("contactKnowledgeId");
     CREATE INDEX IF NOT EXISTS idx_ct_status ON "ContactTask"(status);
+
+    CREATE TABLE IF NOT EXISTS "User" (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      username VARCHAR(100) NOT NULL UNIQUE,
+      "passwordHash" TEXT NOT NULL,
+      name VARCHAR(200),
+      role VARCHAR(20) NOT NULL DEFAULT 'admin',
+      active BOOLEAN NOT NULL DEFAULT true,
+      "createdAt" TIMESTAMP DEFAULT NOW(),
+      "updatedAt" TIMESTAMP DEFAULT NOW()
+    );
   `);
   console.log('[Knowledge] Tables initialized');
 }

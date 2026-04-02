@@ -23,7 +23,7 @@ const redis = require('./services/redis');
 const { evoRequest } = require('./services/evolution');
 
 // Middleware
-const { checkAuth, handleLogin } = require('./middleware/auth');
+const { checkAuth, handleLogin, handleLogout, seedAdmin } = require('./middleware/auth');
 const { isRateLimited } = require('./middleware/rateLimit');
 
 // Routes
@@ -86,6 +86,11 @@ http.createServer((req, res) => {
     return handleLogin(req, res, SECURITY_HEADERS);
   }
 
+  // Logout (no auth check needed)
+  if (req.method === 'GET' && urlPath === '/auth/logout') {
+    return handleLogout(req, res, SECURITY_HEADERS);
+  }
+
   // Webhook receiver (no auth — Evolution API calls this)
   if (req.method === 'POST' && urlPath === '/webhook/internal') {
     return handleWebhook(req, res);
@@ -101,7 +106,9 @@ http.createServer((req, res) => {
   else console.log('WARNING: No PANEL_PASS set, auth disabled. Set PANEL_PASS in .env for production.');
   if (redis.isAvailable()) console.log('Redis connected');
   else console.log('Redis not available, using in-memory fallback');
-  knowledge.init().catch(err => console.error('[Knowledge] Init error:', err.message));
+  knowledge.init()
+    .then(() => seedAdmin())
+    .catch(err => console.error('[Knowledge] Init error:', err.message));
 });
 
 async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {

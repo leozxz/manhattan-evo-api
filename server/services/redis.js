@@ -75,10 +75,11 @@ async function cacheDel(key) {
 // =====================
 // SESSIONS — replaces in-memory sessions{}
 // =====================
-async function sessionSet(token) {
+async function sessionSet(token, data) {
   if (!isAvailable()) return false;
   try {
-    await client.set('mht:sess:' + token, Date.now().toString(), 'EX', 86400); // 24h
+    const value = typeof data === 'string' ? data : JSON.stringify({ created: Date.now() });
+    await client.set('mht:sess:' + token, value, 'EX', 86400); // 24h
     return true;
   } catch { return false; }
 }
@@ -88,6 +89,15 @@ async function sessionValid(token) {
   try {
     const val = await client.get('mht:sess:' + token);
     return val ? true : false;
+  } catch { return null; }
+}
+
+async function sessionGet(token) {
+  if (!isAvailable()) return null;
+  try {
+    const val = await client.get('mht:sess:' + token);
+    if (!val) return null;
+    try { return JSON.parse(val); } catch { return val; }
   } catch { return null; }
 }
 
@@ -170,7 +180,7 @@ async function queueSize() {
 module.exports = {
   getClient, isAvailable,
   cacheGet, cacheSet, cacheDel,
-  sessionSet, sessionValid, sessionDel,
+  sessionSet, sessionValid, sessionGet, sessionDel,
   rateLimitCheck,
   publishSSE, subscribeSSE,
   enqueueMessage, dequeueReady, queueSize,
