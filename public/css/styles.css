@@ -92,6 +92,22 @@ body {
 }
 .sidebar-logo svg { width: 20px; height: 20px; fill: #fff; }
 
+.sidebar-user-wrap { position: relative; margin-bottom: 8px; }
+.sidebar-user-menu {
+  display: none; position: absolute; left: 58px; bottom: 0;
+  background: var(--sidebar-bg); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  min-width: 130px; z-index: 50; padding: 4px 0;
+}
+.sidebar-user-menu.open { display: block; }
+.sidebar-user-menu button {
+  width: 100%; padding: 10px 16px; border: none; background: none;
+  color: #d1d5db; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; transition: background 0.15s;
+}
+.sidebar-user-menu button:hover { background: var(--sidebar-hover); }
+.sidebar-user-menu button svg { width: 16px; height: 16px; fill: #9ca3af; }
+
 /* Main */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 

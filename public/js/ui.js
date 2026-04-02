@@ -76,6 +76,17 @@ function ensureConnected() {
   return true;
 }
 
+// User menu toggle
+function toggleUserMenu() {
+  const menu = document.getElementById('sidebarUserMenu');
+  menu.classList.toggle('open');
+}
+document.addEventListener('mousedown', function(e) {
+  const wrap = document.getElementById('sidebarUserWrap');
+  const menu = document.getElementById('sidebarUserMenu');
+  if (wrap && menu && !wrap.contains(e.target)) menu.classList.remove('open');
+});
+
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
