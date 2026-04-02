@@ -23,7 +23,7 @@ const redis = require('./services/redis');
 const { evoRequest } = require('./services/evolution');
 
 // Middleware
-const { checkAuth, handleLogin, handleLogout, seedAdmin } = require('./middleware/auth');
+const { checkAuth, handleLogin, handleLogout, seedAdmin, hashPassword } = require('./middleware/auth');
 const { isRateLimited } = require('./middleware/rateLimit');
 
 // Routes
@@ -134,6 +134,55 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
     res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
     res.end(JSON.stringify({ webhookUrl: WEBHOOK_URL }));
     return;
+  }
+
+  // User management (admin only)
+  if (urlPath === '/api/users') {
+    if (req.method === 'POST') {
+      let body = '';
+      req.on('data', c => { if (body.length < 4096) body += c; });
+      req.on('end', async () => {
+        try {
+          const { username, password, name } = JSON.parse(body);
+          if (!username || !password) {
+            res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+            res.end(JSON.stringify({ error: 'username and password required' }));
+            return;
+          }
+          const { Pool } = require('pg');
+          const db = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+          const hash = await hashPassword(password);
+          const result = await db.query(
+            `INSERT INTO "PanelUser" (username, "passwordHash", name, role)
+             VALUES ($1, $2, $3, 'admin')
+             ON CONFLICT (username) DO UPDATE SET "passwordHash" = $2, name = $3, "updatedAt" = NOW()
+             RETURNING id, username, name, role, "createdAt"`,
+            [username, hash, name || username]
+          );
+          await db.end();
+          res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+          res.end(JSON.stringify(result.rows[0]));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+    if (req.method === 'GET') {
+      try {
+        const { Pool } = require('pg');
+        const db = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+        const result = await db.query('SELECT id, username, name, role, active, "createdAt" FROM "PanelUser" ORDER BY "createdAt"');
+        await db.end();
+        res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify(result.rows));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
   }
 
   // Message queue — schedule a message
