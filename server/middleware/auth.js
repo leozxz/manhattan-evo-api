@@ -183,6 +183,9 @@ button{width:100%;padding:10px;background:#25d366;color:#fff;border:none;border-
 button:hover{background:#1da851}.err{color:#ea0038;font-size:13px;text-align:center;margin-bottom:12px}
 .code-input{text-align:center;font-size:24px;letter-spacing:12px;font-weight:700}
 .timer{color:#667781;font-size:12px;text-align:center;margin-top:8px}
+.link{text-align:center;margin-top:16px;font-size:13px;color:#667781}
+.link a{color:#25d366;text-decoration:none;font-weight:500}
+.link a:hover{text-decoration:underline}
 .resend{background:none;color:#25d366;border:none;font-size:13px;cursor:pointer;margin-top:4px;font-weight:500;width:auto;padding:4px}
 .resend:hover{text-decoration:underline;background:none}`;
 
@@ -194,7 +197,26 @@ function loginPage(error) {
 <form method="POST" action="/auth/login">
 <input name="user" placeholder="Usuario" required autocomplete="username">
 <input name="pass" type="password" placeholder="Senha" required autocomplete="current-password">
-<button type="submit">Entrar</button></form></div></body></html>`;
+<button type="submit">Entrar</button></form>
+<p class="link"><a href="/auth/register">Criar conta</a></p>
+</div></body></html>`;
+}
+
+function registerPage(error, values) {
+  const v = values || {};
+  const errHtml = error ? '<div class="err">' + error + '</div>' : '';
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Criar Conta - Manhattan</title><style>${PAGE_STYLE}</style></head>
+<body><div class="login"><h2>Manhattan</h2><p class="sub">Crie sua conta</p>${errHtml}
+<form method="POST" action="/auth/register">
+<input name="user" placeholder="Usuario" required autocomplete="username" value="${v.user || ''}">
+<input name="email" type="email" placeholder="Email" required autocomplete="email" value="${v.email || ''}">
+<input name="phone" placeholder="Telefone (ex: 5511999999999)" required inputmode="numeric" value="${v.phone || ''}">
+<input name="pass" type="password" placeholder="Senha" required autocomplete="new-password">
+<input name="pass2" type="password" placeholder="Confirmar senha" required autocomplete="new-password">
+<button type="submit">Criar conta</button></form>
+<p class="link"><a href="/">Ja tenho conta</a></p>
+</div></body></html>`;
 }
 
 function mfaPage(pendingToken, phone, error) {
@@ -344,6 +366,12 @@ async function handleVerify(req, res, securityHeaders) {
 
       await clearPending(pendingToken);
 
+      // Activate account if this is a registration verification
+      if (pending.isRegistration) {
+        const db = getPool();
+        await db.query('UPDATE "PanelUser" SET active = true, "updatedAt" = NOW() WHERE id = $1', [pending.userId]);
+      }
+
       const sessionToken = await createSession(pending.userId, pending.username, pending.role);
       res.writeHead(302, {
         'Set-Cookie': 'session=' + sessionToken + '; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400',
@@ -391,6 +419,98 @@ async function handleResend(req, res, securityHeaders) {
 }
 
 // =====================
+// REGISTER HANDLER
+// =====================
+async function handleRegisterPage(req, res, securityHeaders) {
+  res.writeHead(200, { 'Content-Type': 'text/html', ...securityHeaders });
+  res.end(registerPage());
+}
+
+async function handleRegister(req, res, securityHeaders) {
+  let body = '';
+  req.on('data', c => body += c);
+  req.on('end', async () => {
+    const params = new URLSearchParams(body);
+    const username = params.get('user')?.trim();
+    const email = params.get('email')?.trim();
+    const phone = params.get('phone')?.trim().replace(/\D/g, '');
+    const password = params.get('pass');
+    const password2 = params.get('pass2');
+    const values = { user: username, email, phone };
+
+    try {
+      if (!username || !email || !phone || !password) {
+        res.writeHead(400, { 'Content-Type': 'text/html', ...securityHeaders });
+        res.end(registerPage('Preencha todos os campos', values));
+        return;
+      }
+
+      if (password !== password2) {
+        res.writeHead(400, { 'Content-Type': 'text/html', ...securityHeaders });
+        res.end(registerPage('As senhas nao coincidem', values));
+        return;
+      }
+
+      if (password.length < 6) {
+        res.writeHead(400, { 'Content-Type': 'text/html', ...securityHeaders });
+        res.end(registerPage('A senha deve ter pelo menos 6 caracteres', values));
+        return;
+      }
+
+      const db = getPool();
+
+      // Check duplicate username
+      const existingUser = await db.query('SELECT id FROM "PanelUser" WHERE username = $1', [username]);
+      if (existingUser.rows.length > 0) {
+        res.writeHead(400, { 'Content-Type': 'text/html', ...securityHeaders });
+        res.end(registerPage('Este usuario ja existe', values));
+        return;
+      }
+
+      // Check duplicate email
+      const existingEmail = await db.query('SELECT id FROM "PanelUser" WHERE email = $1', [email]);
+      if (existingEmail.rows.length > 0) {
+        res.writeHead(400, { 'Content-Type': 'text/html', ...securityHeaders });
+        res.end(registerPage('Este email ja esta em uso', values));
+        return;
+      }
+
+      // Create user (inactive until verified)
+      const hash = await hashPassword(password);
+      const result = await db.query(
+        `INSERT INTO "PanelUser" (username, "passwordHash", name, email, phone, role, active)
+         VALUES ($1, $2, $3, $4, $5, 'admin', false) RETURNING id`,
+        [username, hash, username, email, phone]
+      );
+      const userId = result.rows[0].id;
+
+      // Generate code and send via WhatsApp
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      await storeCode(userId, code);
+
+      const pendingToken = crypto.randomBytes(32).toString('hex');
+      await storePending(pendingToken, {
+        userId,
+        username,
+        role: 'admin',
+        phone,
+        email,
+        isRegistration: true,
+      });
+
+      await mc.sendWhatsAppCode(phone, email, code);
+
+      res.writeHead(200, { 'Content-Type': 'text/html', ...securityHeaders });
+      res.end(mfaPage(pendingToken, phone));
+    } catch (err) {
+      console.error('[Auth] Register error:', err.message);
+      res.writeHead(500, { 'Content-Type': 'text/html', ...securityHeaders });
+      res.end(registerPage('Erro interno, tente novamente', values));
+    }
+  });
+}
+
+// =====================
 // LOGOUT
 // =====================
 async function handleLogout(req, res, securityHeaders) {
@@ -404,4 +524,4 @@ async function handleLogout(req, res, securityHeaders) {
   res.end();
 }
 
-module.exports = { checkAuth, handleLogin, handleVerify, handleResend, handleLogout, seedAdmin, hashPassword };
+module.exports = { checkAuth, handleLogin, handleVerify, handleResend, handleRegisterPage, handleRegister, handleLogout, seedAdmin, hashPassword };

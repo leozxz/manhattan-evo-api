@@ -23,7 +23,7 @@ const redis = require('./services/redis');
 const { evoRequest } = require('./services/evolution');
 
 // Middleware
-const { checkAuth, handleLogin, handleVerify, handleResend, handleLogout, seedAdmin, hashPassword } = require('./middleware/auth');
+const { checkAuth, handleLogin, handleVerify, handleResend, handleRegisterPage, handleRegister, handleLogout, seedAdmin, hashPassword } = require('./middleware/auth');
 const { isRateLimited } = require('./middleware/rateLimit');
 
 // Routes
@@ -94,6 +94,12 @@ http.createServer((req, res) => {
   // 2FA resend (no auth — user is mid-login)
   if (req.method === 'POST' && urlPath === '/auth/resend') {
     return handleResend(req, res, SECURITY_HEADERS);
+  }
+
+  // Register (no auth)
+  if (urlPath === '/auth/register') {
+    if (req.method === 'GET') return handleRegisterPage(req, res, SECURITY_HEADERS);
+    if (req.method === 'POST') return handleRegister(req, res, SECURITY_HEADERS);
   }
 
   // Logout (no auth check needed)
