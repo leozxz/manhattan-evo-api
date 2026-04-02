@@ -157,17 +157,17 @@ async function loadUserList() {
     let html = '<p class="user-count">' + active.length + ' usuario' + (active.length !== 1 ? 's' : '') + ' ativo' + (active.length !== 1 ? 's' : '') + '</p>';
     users.forEach(u => {
       const initials = (u.name || u.username || '?').charAt(0).toUpperCase();
-      const badgeClass = u.role === 'admin' ? 'admin' : 'user';
-      const badgeLabel = u.role === 'admin' ? 'Admin' : 'Usuario';
-      const toggleLabel = u.role === 'admin' ? 'Tornar usuario' : 'Tornar admin';
-      const newRole = u.role === 'admin' ? 'user' : 'admin';
+      const isAdmin = u.role === 'admin';
       const inactive = u.active ? '' : ' style="opacity:0.5"';
       html += '<div class="user-row"' + inactive + '>' +
         '<div class="user-avatar"><span style="color:#9ca3af;font-size:14px;font-weight:600">' + initials + '</span></div>' +
         '<div class="user-info"><div class="user-name">' + (u.name || u.username) + (!u.active ? ' <span style="color:#ef4444;font-size:10px">(inativo)</span>' : '') + '</div>' +
         '<div class="user-email">' + (u.email || u.username) + '</div></div>' +
-        '<span class="user-badge ' + badgeClass + '">' + badgeLabel + '</span>' +
-        '<button class="role-toggle" onclick="toggleRole(\'' + u.id + '\',\'' + newRole + '\')">' + toggleLabel + '</button>' +
+        '<div class="role-switch' + (isAdmin ? '' : ' is-user') + '" data-uid="' + u.id + '">' +
+          '<div class="role-slider"></div>' +
+          '<button class="' + (isAdmin ? 'active' : '') + '" onclick="toggleRole(\'' + u.id + '\',\'admin\')">Admin</button>' +
+          '<button class="' + (isAdmin ? '' : 'active') + '" onclick="toggleRole(\'' + u.id + '\',\'user\')">Comum</button>' +
+        '</div>' +
         '</div>';
     });
     body.innerHTML = html;
@@ -177,15 +177,21 @@ async function loadUserList() {
 }
 
 async function toggleRole(userId, newRole) {
+  // Animate switch immediately
+  const sw = document.querySelector('.role-switch[data-uid="' + userId + '"]');
+  if (sw) {
+    sw.classList.toggle('is-user', newRole === 'user');
+    sw.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    sw.querySelector('button:' + (newRole === 'admin' ? 'first-child' : 'last-child')).classList.add('active');
+  }
   try {
     const res = await fetch('/api/users/' + userId + '/role', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: newRole })
     });
-    if (res.ok) loadUserList();
-    else alert('Erro ao alterar permissao');
-  } catch { alert('Erro de conexao'); }
+    if (!res.ok) { loadUserList(); alert('Erro ao alterar permissao'); }
+  } catch { loadUserList(); alert('Erro de conexao'); }
 }
 
 function showPage(name) {
