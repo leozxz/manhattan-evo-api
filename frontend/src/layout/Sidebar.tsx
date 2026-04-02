@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react'
 import { useUIStore } from '../stores/uiStore'
 import type { Page } from '../types'
 
@@ -40,6 +41,51 @@ const navItems: { page: Page; label: string; icon: React.ReactNode }[] = [
   },
 ]
 
+function UserMenu() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative mb-2">
+      <button
+        onClick={() => setOpen(v => !v)}
+        title="Conta"
+        className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${
+          open
+            ? 'bg-[var(--color-accent)] fill-white'
+            : 'fill-gray-400 hover:bg-[var(--color-sidebar-hover)]'
+        }`}
+      >
+        <svg viewBox="0 0 24 24" className="w-5 h-5">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute left-14 bottom-0 bg-[var(--color-sidebar)] border border-gray-700 rounded-xl shadow-lg py-1 min-w-[140px] z-50">
+          <button
+            onClick={() => { window.location.href = '/auth/logout' }}
+            className="w-full px-4 py-2.5 text-sm text-gray-300 hover:bg-[var(--color-sidebar-hover)] flex items-center gap-2 transition-colors"
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-gray-400">
+              <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
+            </svg>
+            Sair
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Sidebar() {
   const { activePage, setPage } = useUIStore()
 
@@ -71,16 +117,8 @@ export function Sidebar() {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Logout */}
-      <button
-        onClick={() => { window.location.href = '/auth/logout' }}
-        title="Sair"
-        className="w-11 h-11 rounded-xl flex items-center justify-center transition-all fill-gray-400 text-gray-400 hover:bg-red-500/20 hover:fill-red-400 hover:text-red-400 mb-2"
-      >
-        <svg viewBox="0 0 24 24" className="w-6 h-6">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
-        </svg>
-      </button>
+      {/* User menu */}
+      <UserMenu />
     </div>
   )
 }
