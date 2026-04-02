@@ -79,7 +79,7 @@ async function findUserByUsername(username) {
   const db = getPool();
   if (!db) return null;
   const result = await db.query(
-    'SELECT * FROM "User" WHERE username = $1 AND active = true',
+    'SELECT * FROM "PanelUser" WHERE username = $1 AND active = true',
     [username]
   );
   return result.rows[0] || null;
@@ -88,7 +88,7 @@ async function findUserByUsername(username) {
 async function userCount() {
   const db = getPool();
   if (!db) return 0;
-  const result = await db.query('SELECT COUNT(*) as count FROM "User"');
+  const result = await db.query('SELECT COUNT(*) as count FROM "PanelUser"');
   return parseInt(result.rows[0].count);
 }
 
@@ -101,7 +101,7 @@ async function seedAdmin() {
   const password = process.env.ADMIN_PASS || 'admin123';
   const hash = await hashPassword(password);
   await db.query(
-    `INSERT INTO "User" (username, "passwordHash", name, role) VALUES ($1, $2, $3, $4)
+    `INSERT INTO "PanelUser" (username, "passwordHash", name, role) VALUES ($1, $2, $3, $4)
      ON CONFLICT (username) DO NOTHING`,
     ['admin', hash, 'Administrador', 'admin']
   );
