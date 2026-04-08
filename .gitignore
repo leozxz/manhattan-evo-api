@@ -3,8 +3,8 @@
 
 # Environment variables
 .env
-*.env
 .env.*
+!.env.example
 
 # Metrics data
 .metrics/
