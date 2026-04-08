@@ -38,6 +38,7 @@ lerna-debug.log*
 /src/env.yml
 /store
 *.env
+!.env.example
 
 /temp/*
 
@@ -45,4 +46,5 @@ lerna-debug.log*
 *.DS_Store
 .tool-versions
 
-/prisma/migrations/*
+# Keep migrations tracked for Railway deploy
+# /prisma/migrations/*
