@@ -9,9 +9,12 @@
 # Metrics data
 .metrics/
 
-# Evolution API (cloned repo & zip)
-evolution-api/
+# Evolution API artifacts
 evolution-api.zip
+evolution-api/node_modules/
+evolution-api/dist/
+evolution-api/.env
+evolution-api/.env.*
 
 # Node modules
 node_modules/
