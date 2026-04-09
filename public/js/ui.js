@@ -147,6 +147,62 @@ function closeUserManager() {
   document.getElementById('userManagerOverlay').style.display = 'none';
 }
 
+function applyPhoneMask(input) {
+  let v = input.value.replace(/\D/g, '');
+  // Limit to 13 digits (55 + DD + 9XXXXXXXX)
+  if (v.length > 13) v = v.slice(0, 13);
+  // Auto-prepend 55 if user starts typing DDD
+  if (v.length > 0 && !v.startsWith('55')) {
+    v = '55' + v;
+  }
+  let formatted = '';
+  if (v.length > 0) formatted = '+' + v.slice(0, 2);
+  if (v.length > 2) formatted += ' (' + v.slice(2, 4);
+  if (v.length > 4) formatted += ') ' + v.slice(4, 9);
+  if (v.length > 9) formatted += '-' + v.slice(9, 13);
+  input.value = formatted;
+}
+
+function phoneToRaw(masked) {
+  return masked.replace(/\D/g, '');
+}
+
+let userFormVisible = false;
+
+async function createUser() {
+  const username = document.getElementById('newUserUsername').value.trim();
+  const password = document.getElementById('newUserPassword').value.trim();
+  const name = document.getElementById('newUserName').value.trim();
+  const email = document.getElementById('newUserEmail').value.trim();
+  const phoneRaw = phoneToRaw(document.getElementById('newUserPhone').value);
+
+  if (!username || !password) { alert('Usuario e senha sao obrigatorios'); return; }
+  if (phoneRaw && phoneRaw.length !== 13) { alert('Telefone deve ter o formato completo: +55 (DD) 9XXXX-XXXX'); return; }
+
+  const btn = document.getElementById('createUserBtn');
+  btn.disabled = true;
+  btn.textContent = 'Criando...';
+  try {
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, name: name || username, email: email || null, phone: phoneRaw || null })
+    });
+    if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Erro ao criar'); }
+    userFormVisible = false;
+    loadUserList();
+  } catch (err) {
+    alert('Erro: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = 'Criar Usuario';
+  }
+}
+
+function toggleUserForm() {
+  userFormVisible = !userFormVisible;
+  loadUserList();
+}
+
 async function loadUserList() {
   const body = document.getElementById('userManagerBody');
   try {
@@ -154,7 +210,23 @@ async function loadUserList() {
     if (!res.ok) throw new Error('Erro ao carregar');
     const users = await res.json();
     const active = users.filter(u => u.active);
-    let html = '<p class="user-count">' + active.length + ' usuario' + (active.length !== 1 ? 's' : '') + ' ativo' + (active.length !== 1 ? 's' : '') + '</p>';
+
+    let html = '<button class="user-form-toggle" onclick="toggleUserForm()">' + (userFormVisible ? '− Cancelar' : '+ Novo Usuario') + '</button>';
+
+    if (userFormVisible) {
+      html += '<div class="user-form">' +
+        '<div class="user-form-row">' +
+          '<input id="newUserName" type="text" placeholder="Nome">' +
+          '<input id="newUserUsername" type="text" placeholder="Usuario *">' +
+        '</div>' +
+        '<input id="newUserPassword" type="password" placeholder="Senha *">' +
+        '<input id="newUserEmail" type="email" placeholder="E-mail">' +
+        '<input id="newUserPhone" type="text" placeholder="+55 (DD) 9XXXX-XXXX" oninput="applyPhoneMask(this)">' +
+        '<button id="createUserBtn" class="user-form-btn" onclick="createUser()">Criar Usuario</button>' +
+        '</div>';
+    }
+
+    html += '<p class="user-count">' + active.length + ' usuario' + (active.length !== 1 ? 's' : '') + ' ativo' + (active.length !== 1 ? 's' : '') + '</p>';
     users.forEach(u => {
       const initials = (u.name || u.username || '?').charAt(0).toUpperCase();
       const isAdmin = u.role === 'admin';

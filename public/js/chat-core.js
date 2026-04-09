@@ -21,13 +21,7 @@ let showPanel = false;
 let chatFilter = 'all'; // 'all', 'groups', 'private'
 let allChats = []; // unified list: groups + individual chats
 
-function isGroupJid(jid) { return jid && jid.endsWith('@g.us'); }
-function isPrivateJid(jid) { return jid && jid.endsWith('@s.whatsapp.net'); }
-
-function isRealPhone(num) {
-  if (!num || num.length > 15) return false;
-  return /^\d{10,13}$/.test(num);
-}
+// JID helpers (isGroupJid, isPrivateJid, isRealPhone, phoneKey) -> jid-utils.js
 
 async function getSendNumber() {
   if (!selectedGroup) return '';
@@ -57,8 +51,6 @@ async function getSendNumber() {
 
   return mJid;
 }
-
-function phoneKey(phone) { return phone ? phone.slice(-8) : ''; }
 
 function rebuildPhoneIndex() {
   phoneIndex = {};

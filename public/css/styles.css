@@ -171,6 +171,17 @@ body {
 .role-switch button:not(.active) { color: #9ca3af; }
 .role-switch button:not(.active):hover { color: #d1d5db; }
 .user-count { font-size: 12px; color: #667781; margin-bottom: 12px; }
+.user-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.user-form input { background: var(--sidebar-hover, #2a2d35); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--text-primary, #e5e7eb); outline: none; }
+.user-form input::placeholder { color: #667781; }
+.user-form input:focus { border-color: var(--accent); }
+.user-form-row { display: flex; gap: 8px; }
+.user-form-row input { flex: 1; min-width: 0; }
+.user-form-btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.user-form-btn:hover { opacity: 0.9; }
+.user-form-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.user-form-toggle { background: none; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 6px 14px; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; margin-bottom: 12px; }
+.user-form-toggle:hover { background: rgba(255,255,255,0.05); }
 
 /* Main */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }

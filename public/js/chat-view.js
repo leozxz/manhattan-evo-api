@@ -197,16 +197,8 @@ async function fetchAndRenderMessages() {
   const messageJid = selectedGroupData?.messageJid || selectedGroup;
   const phone = selectedGroupData?.phone || '';
 
-  // Build list of JIDs to try
-  const jidsToTry = [messageJid];
-  if (phone) {
-    const pJid = phone + '@s.whatsapp.net';
-    if (pJid !== messageJid) jidsToTry.push(pJid);
-    if (phone.startsWith('55') && phone.length === 13)
-      jidsToTry.push(phone.slice(0, 4) + phone.slice(5) + '@s.whatsapp.net');
-    else if (phone.startsWith('55') && phone.length === 12)
-      jidsToTry.push(phone.slice(0, 4) + '9' + phone.slice(4) + '@s.whatsapp.net');
-  }
+  // Build list of JIDs to try (centralized in jid-utils.js)
+  const jidsToTry = jidVariants(messageJid, phone);
 
   // Query ALL JIDs and merge results
   const dedupIds = new Set();

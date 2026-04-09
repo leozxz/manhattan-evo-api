@@ -192,25 +192,10 @@ function startSSE() {
 
         if (allJids.some(j => isDeletedChat(j))) return;
 
-        let chat = null;
-        for (const j of allJids) {
-          chat = allChats.find(c => c.id === j || c.messageJid === j);
-          if (chat) break;
-        }
-        if (!chat) {
-          for (const ph of allPhones) {
-            chat = findChatByPhone(ph);
-            if (chat) break;
-            const pk = phoneKey(ph);
-            chat = allChats.find(c => {
-              if (c.phone && phoneKey(c.phone) === pk) return true;
-              if (c.id && phoneKey(c.id.split('@')[0]) === pk) return true;
-              if (c.messageJid && phoneKey(c.messageJid.split('@')[0]) === pk) return true;
-              return false;
-            });
-            if (chat) break;
-          }
-        }
+        // Use centralized JID lookup (checks all variants including phone)
+        const mainPhone = allPhones[0] || '';
+        let chat = findChatByJid(remoteJid, mainPhone);
+        if (!chat && remoteJidAlt) chat = findChatByJid(remoteJidAlt, mainPhone);
 
         if (chat && (chat.id === selectedGroup || chat.messageJid === selectedGroup)) return;
         if (!chat && selectedGroupData?.phone) {

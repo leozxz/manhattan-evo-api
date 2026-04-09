@@ -75,7 +75,7 @@ async function loadGroups() {
     if (!jid || jid === 'status@broadcast' || jid === '0@s.whatsapp.net') return;
     const lastTs = c.lastMessage?.messageTimestamp || 0;
     const gm = groupMeta[jid];
-    const isLid = jid.endsWith('@lid');
+    const isLid = isLidJid(jid);
     const isPrivate = isPrivateJid(jid) || isLid;
     const isGroup = isGroupJid(jid);
 
@@ -84,15 +84,7 @@ async function loadGroups() {
       resolvedName = c.lastMessage.pushName;
     }
 
-    let phone = '';
-    if (isPrivateJid(jid)) {
-      phone = jid.split('@')[0];
-    } else if (isLid && c.lastMessage?.key) {
-      const remoteAlt = c.lastMessage.key.remoteJidAlt || '';
-      const partAlt = c.lastMessage.key.participantAlt || '';
-      const alt = remoteAlt || partAlt;
-      if (alt && alt.includes('@s.whatsapp.net')) phone = alt.split('@')[0];
-    }
+    const phone = resolvePhoneFromChat(c);
 
     if (isDeletedChat(jid)) return;
 
