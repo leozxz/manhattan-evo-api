@@ -4,6 +4,19 @@
 
 let aiSearching = false;
 
+function formatTsForAi(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+  const isYesterday = d.toDateString() === yesterday.toDateString();
+  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  if (isToday) return 'hoje ' + time;
+  if (isYesterday) return 'ontem ' + time;
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + time;
+}
+
 async function aiSearch() {
   if (aiSearching) return;
   const input = document.getElementById('aiSearchInput');
@@ -14,58 +27,53 @@ async function aiSearch() {
   aiSearching = true;
   const btn = document.getElementById('aiSearchBtn');
   const status = document.getElementById('aiSearchStatus');
-  const summary = document.getElementById('aiSummary');
-  const results = document.getElementById('aiResults');
+  const summaryEl = document.getElementById('aiSummary');
+  const resultsEl = document.getElementById('aiResults');
 
   btn.disabled = true;
-  results.innerHTML = '';
-  summary.style.display = 'none';
+  resultsEl.innerHTML = '';
+  summaryEl.style.display = 'none';
   status.style.display = 'flex';
-  status.innerHTML = '<div class="ai-spinner"></div> Buscando mensagens recentes...';
+  status.innerHTML = '<div class="ai-spinner"></div> Buscando conversas recentes...';
 
   try {
     // 1. Fetch recent chats
     const chatsRes = await api('POST', '/chat/findChats/' + currentInstance, {});
     const chats = chatsRes.ok && Array.isArray(chatsRes.data) ? chatsRes.data : [];
 
-    // Filter to recent active chats (last 7 days), skip groups for now, limit to 30
     const now = Date.now() / 1000;
     const recentChats = chats
       .filter(c => {
         const ts = c.lastMessage?.messageTimestamp || 0;
-        return ts > now - 7 * 86400 && c.remoteJid && c.remoteJid !== 'status@broadcast';
+        return ts > now - 7 * 86400 && c.remoteJid && c.remoteJid !== 'status@broadcast' && c.remoteJid !== '0@s.whatsapp.net';
       })
       .sort((a, b) => (b.lastMessage?.messageTimestamp || 0) - (a.lastMessage?.messageTimestamp || 0))
-      .slice(0, 30);
+      .slice(0, 40);
 
     if (recentChats.length === 0) {
       status.innerHTML = 'Nenhuma conversa recente encontrada.';
-      aiSearching = false;
-      btn.disabled = false;
-      return;
+      aiSearching = false; btn.disabled = false; return;
     }
 
-    // 2. Fetch messages from each chat (batch of 6)
+    // 2. Fetch messages from each chat (batch of 8)
     status.innerHTML = '<div class="ai-spinner"></div> Lendo ' + recentChats.length + ' conversas...';
 
     const allMessages = [];
-    const contactMap = {}; // id -> name
+    const contactMap = {};
 
-    for (let i = 0; i < recentChats.length; i += 6) {
-      const batch = recentChats.slice(i, i + 6);
+    for (let i = 0; i < recentChats.length; i += 8) {
+      const batch = recentChats.slice(i, i + 8);
       const fetches = batch.map(async (chat) => {
         const jid = chat.remoteJid;
-        const jids = jidVariants(jid, '');
+        const variants = jidVariants(jid, '');
         let msgs = [];
-        for (const j of jids) {
+        for (const j of variants) {
           const r = await api('POST', '/chat/findMessages/' + currentInstance, {
-            where: { key: { remoteJid: j } }, offset: 30, page: 1
+            where: { key: { remoteJid: j } }, offset: 50, page: 1
           });
-          const m = extractMessages(r.ok ? r.data : null);
-          msgs = msgs.concat(m);
+          msgs = msgs.concat(extractMessages(r.ok ? r.data : null));
         }
 
-        // Dedup by message id
         const seen = new Set();
         const contactName = chat.pushName || contactNames[jid] || jid.split('@')[0];
         contactMap[jid] = contactName;
@@ -75,15 +83,18 @@ async function aiSearch() {
           if (!mid || seen.has(mid)) return;
           seen.add(mid);
           const text = getMessageText(m) || getMediaCaption(m);
-          if (!text) return;
+          if (!text || text.length < 2) return;
+          const ts = Number(m.messageTimestamp) || 0;
+          if (ts < now - 7 * 86400) return; // skip old messages
           allMessages.push({
             id: mid,
-            contact: contactName,
+            contact: m.key?.fromMe ? 'EU' : (m.pushName || contactName),
             contactJid: jid,
+            contactName: contactName,
             text: text,
             fromMe: !!m.key?.fromMe,
-            timestamp: Number(m.messageTimestamp) || 0,
-            pushName: m.pushName || contactName
+            timestamp: ts,
+            dateStr: formatTsForAi(ts)
           });
         });
       });
@@ -92,89 +103,79 @@ async function aiSearch() {
 
     if (allMessages.length === 0) {
       status.innerHTML = 'Nenhuma mensagem com texto encontrada.';
-      aiSearching = false;
-      btn.disabled = false;
-      return;
+      aiSearching = false; btn.disabled = false; return;
     }
 
-    // Sort by timestamp and limit to most recent 500
+    // Sort by time (newest first) and limit
     allMessages.sort((a, b) => b.timestamp - a.timestamp);
-    const limitedMsgs = allMessages.slice(0, 500);
+    const limited = allMessages.slice(0, 600);
 
-    status.innerHTML = '<div class="ai-spinner"></div> Analisando ' + limitedMsgs.length + ' mensagens com IA...';
+    status.innerHTML = '<div class="ai-spinner"></div> Analisando ' + limited.length + ' mensagens com IA...';
 
-    // 3. Call AI search endpoint
+    // 3. Build messages with readable timestamps and index-based IDs
+    const indexed = limited.map((m, i) => ({ ...m, idx: i }));
+    const msgLines = indexed.map(m =>
+      '[' + m.idx + '] (' + m.dateStr + ') ' + m.contact + ': ' + m.text
+    );
+
     const aiRes = await api('POST', '/ai/search', {
       question,
-      messages: limitedMsgs.map(m => ({
-        id: m.id,
-        contact: m.fromMe ? 'EU' : m.contact,
+      messages: indexed.map(m => ({
+        id: String(m.idx),
+        contact: m.contact,
         text: m.text,
         fromMe: m.fromMe,
         timestamp: m.timestamp
       })),
-      contacts: [...new Set(Object.values(contactMap))]
+      contacts: [...new Set(Object.values(contactMap))],
+      messageLines: msgLines.join('\n')
     });
 
     if (!aiRes.ok || !aiRes.data) {
       status.innerHTML = 'Erro ao consultar IA: ' + (aiRes.data?.error || 'tente novamente');
-      aiSearching = false;
-      btn.disabled = false;
-      return;
+      aiSearching = false; btn.disabled = false; return;
     }
 
     const { results: matches, summary: aiSummaryText } = aiRes.data;
 
-    // 4. Show summary
     if (aiSummaryText) {
-      summary.textContent = aiSummaryText;
-      summary.style.display = 'block';
+      summaryEl.textContent = aiSummaryText;
+      summaryEl.style.display = 'block';
     }
 
-    // 5. Show results
     if (!matches || matches.length === 0) {
       status.innerHTML = 'Nenhuma mensagem relevante encontrada.';
-      aiSearching = false;
-      btn.disabled = false;
-      return;
+      aiSearching = false; btn.disabled = false; return;
     }
 
     status.style.display = 'none';
-    results.innerHTML = '';
+    resultsEl.innerHTML = '';
 
     matches.forEach(match => {
-      const origMsg = limitedMsgs.find(m => m.id === match.id);
+      const idx = parseInt(match.id, 10);
+      const origMsg = indexed[idx];
       if (!origMsg) return;
 
-      const ts = origMsg.timestamp;
-      const date = new Date(ts * 1000);
+      const date = new Date(origMsg.timestamp * 1000);
       const timeStr = date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
       const card = document.createElement('div');
       card.className = 'ai-result-card';
       card.innerHTML = `
         <div class="ai-result-header">
-          <div class="ai-result-avatar">${(origMsg.contact || '?').charAt(0).toUpperCase()}</div>
+          <div class="ai-result-avatar">${(origMsg.contactName || '?').charAt(0).toUpperCase()}</div>
           <div class="ai-result-info">
-            <span class="ai-result-name">${escapeHtml(origMsg.contact)}</span>
+            <span class="ai-result-name">${escapeHtml(origMsg.contactName)}</span>
             <span class="ai-result-time">${timeStr}</span>
           </div>
+          <div class="ai-result-open">Abrir conversa &rarr;</div>
         </div>
         <div class="ai-result-text">${escapeHtml(origMsg.text)}</div>
         ${match.reason ? '<div class="ai-result-reason">' + escapeHtml(match.reason) + '</div>' : ''}
       `;
 
-      // Click to open the chat
-      card.style.cursor = 'pointer';
-      card.onclick = () => {
-        const chat = findChatByJid(origMsg.contactJid);
-        if (chat) {
-          showPage('chat');
-          if (typeof selectGroup === 'function') selectGroup(chat.id);
-        }
-      };
-
-      results.appendChild(card);
+      card.onclick = () => openChatFromAi(origMsg.contactJid);
+      resultsEl.appendChild(card);
     });
 
   } catch (err) {
@@ -183,4 +184,22 @@ async function aiSearch() {
 
   aiSearching = false;
   btn.disabled = false;
+}
+
+function openChatFromAi(jid) {
+  // Find the chat object
+  let chat = findChatByJid(jid);
+  if (!chat) {
+    // Try allChats directly
+    chat = allChats.find(c => c.id === jid || c.messageJid === jid);
+  }
+  if (!chat) {
+    toast('Conversa nao encontrada', 'error');
+    return;
+  }
+  showPage('chat');
+  // Small delay to ensure page is visible before selecting
+  setTimeout(() => {
+    if (typeof selectGroup === 'function') selectGroup(chat);
+  }, 100);
 }

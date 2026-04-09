@@ -171,13 +171,13 @@ Formato:
 
 function handleAiSearch(req, res, securityHeaders) {
   let body = '';
-  req.on('data', c => { if (body.length < 65536) body += c; });
+  req.on('data', c => { if (body.length < 524288) body += c; });
   req.on('end', async () => {
     try {
-      const { question, messages, contacts } = JSON.parse(body);
-      if (!question || !Array.isArray(messages) || messages.length === 0) {
+      const { question, messages, contacts, messageLines } = JSON.parse(body);
+      if (!question || (!messageLines && (!Array.isArray(messages) || messages.length === 0))) {
         res.writeHead(400, { 'Content-Type': 'application/json', ...securityHeaders });
-        res.end(JSON.stringify({ error: 'question and messages array required' }));
+        res.end(JSON.stringify({ error: 'question and messages required' }));
         return;
       }
       const openaiKey = process.env.OPENAI_API_KEY || '';
@@ -187,31 +187,40 @@ function handleAiSearch(req, res, securityHeaders) {
         return;
       }
 
-      // Build compact message context for AI
-      // messages format: [{ id, contact, text, fromMe, timestamp }]
-      const msgContext = messages.map(m =>
+      // Use pre-formatted messageLines (with human-readable dates) if available
+      const msgContext = messageLines || messages.map(m =>
         `[${m.id}] ${m.fromMe ? 'EU' : m.contact}: ${m.text}`
       ).join('\n');
 
       const contactList = contacts && contacts.length > 0
-        ? '\n\nContatos conhecidos: ' + contacts.join(', ')
+        ? '\nContatos: ' + contacts.join(', ')
         : '';
+
+      const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 
       const chatMessages = [
         {
           role: 'system',
-          content: `Voce e um assistente que analisa mensagens de WhatsApp. O usuario vai fazer uma pergunta sobre suas conversas. Analise as mensagens abaixo e encontre quais respondem a pergunta.
+          content: `Voce e um assistente que analisa mensagens de WhatsApp. Hoje e ${today}.
 
-Responda APENAS em JSON valido com este formato:
-{"results": [{"id": "id_da_mensagem", "contact": "nome_do_contato", "reason": "breve explicacao de por que esta mensagem e relevante"}], "summary": "resposta resumida para o usuario"}
+O usuario fara perguntas sobre suas conversas. Cada mensagem tem o formato:
+[indice] (data hora) CONTATO: texto
 
-Se nao encontrar nenhuma mensagem relevante, retorne: {"results": [], "summary": "Nao encontrei mensagens relacionadas a essa pergunta."}
+Analise TODAS as mensagens e encontre as que respondem a pergunta do usuario.
 
-IMPORTANTE: O campo "id" deve ser exatamente o id entre colchetes [id] de cada mensagem. Retorne no maximo 10 resultados, priorizando os mais relevantes.`
+REGRAS:
+- O campo "id" na resposta deve ser o NUMERO entre colchetes [numero] — ex: se a mensagem e [42], o id e "42"
+- "EU" significa que o proprio usuario enviou a mensagem
+- Considere contexto temporal: "hoje" = ${today}, "ontem" = dia anterior
+- Priorize mensagens mais relevantes e recentes
+- Maximo 10 resultados
+
+Responda APENAS em JSON:
+{"results": [{"id": "indice", "contact": "nome", "reason": "por que e relevante"}], "summary": "resposta direta para o usuario em portugues"}`
         },
         {
           role: 'user',
-          content: `Mensagens recentes:\n${msgContext}${contactList}\n\nPergunta: ${question}`
+          content: `${contactList}\n\nMensagens:\n${msgContext}\n\nPergunta: ${question}`
         }
       ];
 
