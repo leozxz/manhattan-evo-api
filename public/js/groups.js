@@ -99,7 +99,7 @@ async function createGroup() {
   const desc = document.getElementById('groupDesc').value.trim();
   const firstMsg = document.getElementById('groupFirstMsg').value.trim();
 
-  if (!instName) return toast('Nenhuma instancia conectada', 'error');
+  if (!instName) return toast('Nenhuma instancia admin conectada', 'error');
   if (!name) return toast('Digite o nome do grupo', 'error');
   if (groupParticipants.length === 0) return toast('Adicione pelo menos um participante', 'error');
 
@@ -130,16 +130,18 @@ async function createGroup() {
   await new Promise(r => setTimeout(r, 2000));
   if (selectedMsgType === 'pitch') {
     const pitchName = document.getElementById('pitchSelect').value;
+    const convInst = document.getElementById('groupConvInstance').value;
     if (pitchName && pitches[pitchName]) {
       const msgs = pitches[pitchName];
       toast('Enviando pitch (' + msgs.length + ' msgs)...');
       for (let i = 0; i < msgs.length; i++) {
-        const msgRes = await api('POST', '/message/sendText/' + instName, { number: groupId, text: msgs[i] });
+        // 1a mensagem: admin (instName), demais: conversacional (convInst) se disponivel
+        const sender = (i === 0 || !convInst) ? instName : convInst;
+        const msgRes = await api('POST', '/message/sendText/' + sender, { number: groupId, text: msgs[i] });
         if (!msgRes.ok) {
           toast('Erro ao enviar mensagem ' + (i + 1) + ' do pitch', 'error');
           break;
         }
-        // Small delay between messages to avoid spam detection
         if (i < msgs.length - 1) await new Promise(r => setTimeout(r, 1500));
       }
       toast('Pitch enviado!');

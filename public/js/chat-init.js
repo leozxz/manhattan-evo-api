@@ -71,15 +71,18 @@ async function init() {
       }
     });
 
-    // Merge: keep API as source of truth for state
+    // Merge: keep API as source of truth for state, preserve local fields (role)
     const merged = [];
     const seen = new Set();
+    const localMap = {};
+    instances.forEach(li => { localMap[li.name] = li; });
     apiInstances.forEach(ai => {
       seen.add(ai.name);
-      merged.push({ name: ai.name, state: ai.state });
+      const local = localMap[ai.name] || {};
+      merged.push({ name: ai.name, state: ai.state, role: local.role || 'conversacional' });
     });
     instances.forEach(li => {
-      if (!seen.has(li.name)) merged.push({ ...li, state: 'closed' });
+      if (!seen.has(li.name)) merged.push({ ...li, state: 'closed', role: li.role || 'conversacional' });
     });
     instances = merged;
 

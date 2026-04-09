@@ -235,6 +235,15 @@ body {
   font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
   padding: 2px 8px; border-radius: 4px; background: var(--accent); color: #fff;
 }
+.instance-role-badge {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 3px 10px; border-radius: 12px; border: none; cursor: pointer;
+  transition: all 0.2s;
+}
+.instance-role-badge.role-admin { background: #dcfce7; color: #166534; }
+.instance-role-badge.role-admin:hover { background: #bbf7d0; }
+.instance-role-badge.role-conversacional { background: #dbeafe; color: #1e40af; }
+.instance-role-badge.role-conversacional:hover { background: #bfdbfe; }
 
 .instance-card-header {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;

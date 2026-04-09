@@ -23,6 +23,15 @@ function renderInstances() {
     statusDiv.className = 'instance-status ' + stClass;
     statusDiv.innerHTML = '<div class="instance-status-dot"></div> ' + stLabel;
     header.appendChild(nameSpan);
+
+    const role = inst.role || 'conversacional';
+    const roleBadge = document.createElement('button');
+    roleBadge.className = 'instance-role-badge role-' + role;
+    roleBadge.textContent = role === 'admin' ? 'Admin' : 'Conversacional';
+    roleBadge.title = 'Clique para alternar role';
+    roleBadge.addEventListener('click', (e) => { e.stopPropagation(); toggleInstanceRole(inst.name); });
+    header.appendChild(roleBadge);
+
     if (inst.name === currentInstance) {
       const badge = document.createElement('span');
       badge.className = 'instance-active-badge';
@@ -170,7 +179,7 @@ async function addNewInstance() {
     }
   }
 
-  instances.push({ name, state: 'connecting' });
+  instances.push({ name, state: 'connecting', role: 'conversacional' });
   if (!currentInstance) currentInstance = name;
   saveInstances();
   qrTargetMap[name] = 'qr-new';
@@ -407,26 +416,68 @@ function updateSelector() {
 
   container.style.display = 'flex';
   sel.innerHTML = '';
+
+  // Prefer conversacional instance as default for chat
+  const cur = instances.find(i => i.name === currentInstance);
+  if (!cur || cur.state !== 'open') {
+    const conv = connected.find(i => i.role === 'conversacional');
+    if (conv) { currentInstance = conv.name; saveInstances(); }
+    else if (connected.length > 0) { currentInstance = connected[0].name; saveInstances(); }
+  }
+
   instances.forEach(inst => {
     const opt = document.createElement('option');
     opt.value = inst.name;
-    opt.textContent = inst.name + (inst.state === 'open' ? ' (online)' : ' (offline)');
+    const roleTag = inst.role === 'admin' ? ' [Admin]' : ' [Conv]';
+    opt.textContent = inst.name + roleTag + (inst.state === 'open' ? '' : ' (offline)');
     opt.selected = inst.name === currentInstance;
     sel.appendChild(opt);
   });
 
-  const cur = instances.find(i => i.name === currentInstance);
-  dot.className = 'instance-dot' + (cur && cur.state === 'open' ? ' on' : '');
+  const curInst = instances.find(i => i.name === currentInstance);
+  dot.className = 'instance-dot' + (curInst && curInst.state === 'open' ? ' on' : '');
+}
+
+function toggleInstanceRole(name) {
+  const inst = instances.find(i => i.name === name);
+  if (!inst) return;
+  inst.role = inst.role === 'admin' ? 'conversacional' : 'admin';
+  saveInstances();
+  renderInstances();
+  updateSelector();
+  updateGroupInstanceSelect();
+  updateConvInstanceSelect();
+}
+
+function updateConvInstanceSelect() {
+  const sel = document.getElementById('groupConvInstance');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const convInstances = instances.filter(i => i.state === 'open' && i.role === 'conversacional');
+  convInstances.forEach(inst => {
+    const opt = document.createElement('option');
+    opt.value = inst.name;
+    opt.textContent = inst.name;
+    sel.appendChild(opt);
+  });
 }
 
 function updateGroupInstanceSelect() {
   const sel = document.getElementById('groupInstance');
   sel.innerHTML = '';
-  instances.filter(i => i.state === 'open').forEach(inst => {
+  const adminInstances = instances.filter(i => i.state === 'open' && i.role === 'admin');
+  if (adminInstances.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = '-- Nenhum admin conectado --';
+    sel.appendChild(opt);
+  }
+  adminInstances.forEach(inst => {
     const opt = document.createElement('option');
     opt.value = inst.name;
     opt.textContent = inst.name;
     opt.selected = inst.name === currentInstance;
     sel.appendChild(opt);
   });
+  updateConvInstanceSelect();
 }
