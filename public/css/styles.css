@@ -219,56 +219,78 @@ body {
 
 /* Connect page */
 .instances-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px; max-width: 960px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 24px; max-width: 1100px; margin: 0 auto;
 }
 
-.instance-card {
-  background: var(--panel); border-radius: var(--radius-lg); padding: 24px;
-  box-shadow: var(--shadow); position: relative;
-  border: 1px solid var(--border-light);
-  transition: box-shadow 0.2s, border-color 0.2s;
+/* ── Instance card ── */
+.ic {
+  background: #fff; border-radius: 16px; padding: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  border: 1px solid #eee;
+  position: relative;
+  overflow: visible;
+  transition: box-shadow 0.25s, transform 0.25s;
 }
-.instance-card:hover { box-shadow: var(--shadow-md); }
-.instance-card.card-active { border-color: var(--accent); box-shadow: var(--shadow-md), 0 0 0 1px var(--accent); }
-.instance-active-badge {
-  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-  padding: 2px 8px; border-radius: 4px; background: var(--accent); color: #fff;
+.ic:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.08); transform: translateY(-2px); }
+.ic.ic-active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,209,102,0.15), 0 4px 16px rgba(0,0,0,0.06); }
+
+/* ── 3D ribbon tags ── */
+.ic-ribbons {
+  display: flex; gap: 6px; padding: 0 16px;
+  position: relative; top: -11px; margin-bottom: -4px;
+  flex-wrap: wrap;
 }
-.instance-role-badge {
-  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-  padding: 3px 10px; border-radius: 12px; border: none; cursor: pointer;
-  transition: all 0.2s;
+.ic-ribbon {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  padding: 4px 12px; border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  position: relative;
 }
-.instance-role-badge.role-admin { background: #dcfce7; color: #166534; }
-.instance-role-badge.role-admin:hover { background: #bbf7d0; }
-.instance-role-badge.role-conversacional { background: #dbeafe; color: #1e40af; }
-.instance-role-badge.role-conversacional:hover { background: #bfdbfe; }
-
-.instance-card-header {
-  display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
+.ic-ribbon::after {
+  content: '';
+  position: absolute; bottom: -3px; left: 4px;
+  width: 8px; height: 3px;
+  background: inherit; filter: brightness(0.8);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  border-radius: 0 0 2px 0;
 }
-.instance-card-name { font-size: 15px; font-weight: 700; letter-spacing: -0.2px; }
 
-.instance-status {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px;
-  letter-spacing: 0.2px;
+.ic-ribbon-open { background: #10b981; color: #fff; }
+.ic-ribbon-closed { background: #ef4444; color: #fff; }
+.ic-ribbon-connecting { background: #f59e0b; color: #fff; }
+.ic-ribbon-role-admin { background: #6366f1; color: #fff; }
+.ic-ribbon-role-conversacional { background: #3b82f6; color: #fff; }
+.ic-ribbon-active { background: #111827; color: #fff; }
+
+/* ── Card body (QR / checkmark) ── */
+.ic-body { padding: 8px 20px; min-height: 60px; }
+
+/* ── Editable fields ── */
+.ic-fields {
+  display: flex; gap: 10px; padding: 0 20px 16px;
 }
-.instance-status.open { background: var(--accent-light); color: #059669; }
-.instance-status.closed { background: var(--danger-light); color: var(--danger); }
-.instance-status.connecting { background: var(--warning-light); color: #d97706; }
+.ic-field { flex: 1; }
+.ic-field label {
+  display: block; font-size: 10px; font-weight: 700;
+  color: #9ca3af; text-transform: uppercase; letter-spacing: 0.4px;
+  margin-bottom: 4px;
+}
+.ic-input {
+  width: 100%; padding: 7px 10px; border: 1px solid #e5e7eb;
+  border-radius: 8px; font-size: 13px; color: #111827;
+  background: #fafafa; outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.ic-input:focus {
+  border-color: var(--accent); background: #fff;
+  box-shadow: 0 0 0 3px rgba(0,209,102,0.10);
+}
 
-.instance-status-dot { width: 6px; height: 6px; border-radius: 50%; }
-.instance-status.open .instance-status-dot { background: var(--accent); }
-.instance-status.closed .instance-status-dot { background: var(--danger); }
-.instance-status.connecting .instance-status-dot { background: var(--warning); animation: pulse 2s infinite; }
-
-.instance-card-body { min-height: 60px; }
-
-.instance-card-actions {
-  display: flex; gap: 8px; margin-top: 16px; padding-top: 16px;
-  border-top: 1px solid var(--border-light);
+/* ── Actions ── */
+.ic-actions {
+  display: flex; gap: 8px; padding: 12px 20px 16px;
+  border-top: 1px solid #f3f4f6;
 }
 
 .qr-container {
@@ -1451,8 +1473,9 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 }
 
 @media (max-width: 480px) {
-  .instance-card { padding: 16px; }
-  .instance-card-actions { flex-wrap: wrap; }
+  .instances-grid { grid-template-columns: 1fr; }
+  .ic { margin: 0; }
+  .ic-fields { flex-direction: column; gap: 8px; }
   .qr-container { width: 160px; height: 160px; }
   .qr-container img { width: 150px; height: 150px; }
 }

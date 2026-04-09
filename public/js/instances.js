@@ -9,81 +9,84 @@ function renderInstances() {
 
   instances.forEach(inst => {
     const safeName = instanceDomId(inst.name);
-    const card = document.createElement('div');
-    card.className = 'instance-card' + (inst.name === currentInstance ? ' card-active' : '');
+    const role = inst.role || 'conversacional';
     const stClass = inst.state === 'open' ? 'open' : inst.state === 'connecting' ? 'connecting' : 'closed';
     const stLabel = inst.state === 'open' ? 'Conectado' : inst.state === 'connecting' ? 'Aguardando QR' : 'Desconectado';
+    const isActive = inst.name === currentInstance;
 
-    const header = document.createElement('div');
-    header.className = 'instance-card-header';
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'instance-card-name';
-    nameSpan.textContent = inst.name;
-    const statusDiv = document.createElement('div');
-    statusDiv.className = 'instance-status ' + stClass;
-    statusDiv.innerHTML = '<div class="instance-status-dot"></div> ' + stLabel;
-    header.appendChild(nameSpan);
+    const card = document.createElement('div');
+    card.className = 'ic' + (isActive ? ' ic-active' : '');
 
-    const role = inst.role || 'conversacional';
-    const roleBadge = document.createElement('button');
-    roleBadge.className = 'instance-role-badge role-' + role;
-    roleBadge.textContent = role === 'admin' ? 'Admin' : 'Conversacional';
-    roleBadge.title = 'Clique para alternar role';
-    roleBadge.addEventListener('click', (e) => { e.stopPropagation(); toggleInstanceRole(inst.name); });
-    header.appendChild(roleBadge);
+    // ── Ribbon tags (3D labels that overflow the card) ──
+    const ribbons = document.createElement('div');
+    ribbons.className = 'ic-ribbons';
 
-    if (inst.name === currentInstance) {
-      const badge = document.createElement('span');
-      badge.className = 'instance-active-badge';
-      badge.textContent = 'Em uso';
-      header.appendChild(badge);
+    const statusRibbon = document.createElement('span');
+    statusRibbon.className = 'ic-ribbon ic-ribbon-' + stClass;
+    statusRibbon.textContent = stLabel;
+    ribbons.appendChild(statusRibbon);
+
+    const roleRibbon = document.createElement('span');
+    roleRibbon.className = 'ic-ribbon ic-ribbon-role-' + role;
+    roleRibbon.textContent = role === 'admin' ? 'Admin' : 'Conversacional';
+    ribbons.appendChild(roleRibbon);
+
+    if (isActive) {
+      const activeRibbon = document.createElement('span');
+      activeRibbon.className = 'ic-ribbon ic-ribbon-active';
+      activeRibbon.textContent = 'Em uso';
+      ribbons.appendChild(activeRibbon);
     }
-    header.appendChild(statusDiv);
 
+    // ── Card body ──
     const body = document.createElement('div');
-    body.className = 'instance-card-body';
+    body.className = 'ic-body';
     body.id = 'card-body-' + safeName;
+
     if (inst.state === 'open') {
-      body.innerHTML = '<div style="text-align:center;color:#25d366"><svg width="48" height="48" viewBox="0 0 24 24" fill="#25d366"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>';
+      body.innerHTML = '<div style="text-align:center;color:#25d366;padding:12px 0"><svg width="44" height="44" viewBox="0 0 24 24" fill="#25d366"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>';
     } else {
-      const qrDiv = document.createElement('div');
-      qrDiv.className = 'qr-container';
-      qrDiv.id = 'qr-' + safeName;
-      qrDiv.innerHTML = '<span class="qr-placeholder">Clique "Conectar" para gerar QR Code</span>';
-      body.appendChild(qrDiv);
+      body.innerHTML = '<div class="qr-container" id="qr-' + safeName + '"><span class="qr-placeholder">Clique "Conectar" para gerar QR Code</span></div>';
     }
 
+    // ── Editable fields ──
+    const fields = document.createElement('div');
+    fields.className = 'ic-fields';
+
+    // Name
+    fields.innerHTML = `
+      <div class="ic-field">
+        <label>Nome</label>
+        <input type="text" value="${inst.name}" class="ic-input" data-inst="${inst.name}" data-field="name" onchange="updateInstanceField(this)" readonly onfocus="this.removeAttribute('readonly')" onblur="this.setAttribute('readonly','')">
+      </div>
+      <div class="ic-field">
+        <label>Tipo</label>
+        <select class="ic-input" data-inst="${inst.name}" data-field="role" onchange="updateInstanceField(this)">
+          <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
+          <option value="conversacional" ${role === 'conversacional' ? 'selected' : ''}>Conversacional</option>
+        </select>
+      </div>
+    `;
+
+    // ── Actions ──
     const actions = document.createElement('div');
-    actions.className = 'instance-card-actions';
+    actions.className = 'ic-actions';
 
     if (inst.state === 'open') {
-      const btnUse = document.createElement('button');
-      btnUse.className = 'btn btn-primary btn-sm';
-      btnUse.textContent = 'Usar esta';
-      btnUse.addEventListener('click', () => useInstance(inst.name));
-      actions.appendChild(btnUse);
-
-      const btnLogout = document.createElement('button');
-      btnLogout.className = 'btn btn-danger btn-sm';
-      btnLogout.textContent = 'Desconectar';
-      btnLogout.addEventListener('click', () => logoutInstance(inst.name));
-      actions.appendChild(btnLogout);
+      actions.innerHTML = `
+        <button class="btn btn-primary btn-sm" onclick="useInstance('${inst.name}')">Usar esta</button>
+        <button class="btn btn-danger btn-sm" onclick="logoutInstance('${inst.name}')">Desconectar</button>
+      `;
     } else {
-      const btnReconnect = document.createElement('button');
-      btnReconnect.className = 'btn btn-primary btn-sm';
-      btnReconnect.textContent = 'Conectar';
-      btnReconnect.addEventListener('click', () => reconnectInstance(inst.name));
-      actions.appendChild(btnReconnect);
+      actions.innerHTML = `
+        <button class="btn btn-primary btn-sm" onclick="reconnectInstance('${inst.name}')">Conectar</button>
+      `;
     }
+    actions.innerHTML += `<button class="btn btn-secondary btn-sm" onclick="deleteInstance('${inst.name}')">Remover</button>`;
 
-    const btnDelete = document.createElement('button');
-    btnDelete.className = 'btn btn-secondary btn-sm';
-    btnDelete.textContent = 'Remover';
-    btnDelete.addEventListener('click', () => deleteInstance(inst.name));
-    actions.appendChild(btnDelete);
-
-    card.appendChild(header);
+    card.appendChild(ribbons);
     card.appendChild(body);
+    card.appendChild(fields);
     card.appendChild(actions);
     grid.appendChild(card);
   });
@@ -326,12 +329,10 @@ async function reconnectInstance(name) {
       const inst = instances.find(i => i.name === name);
       if (inst) inst.state = 'connecting';
       saveInstances();
-      // Update only the status badge, NOT full re-render (would destroy QR)
-      const statusEl = qrNow?.closest('.instance-card')?.querySelector('.instance-status');
-      if (statusEl) {
-        statusEl.className = 'instance-status connecting';
-        statusEl.innerHTML = '<div class="instance-status-dot"></div> Aguardando QR';
-      }
+      // Update only the status ribbon, NOT full re-render (would destroy QR)
+      const cardEl = qrNow?.closest('.ic');
+      const ribbonEl = cardEl?.querySelector('.ic-ribbon-closed, .ic-ribbon-open');
+      if (ribbonEl) { ribbonEl.className = 'ic-ribbon ic-ribbon-connecting'; ribbonEl.textContent = 'Aguardando QR'; }
       startConnectionChecker(name);
       toast('Escaneie o QR Code para "' + name + '"');
       return;
@@ -436,6 +437,28 @@ function updateSelector() {
 
   const curInst = instances.find(i => i.name === currentInstance);
   dot.className = 'instance-dot' + (curInst && curInst.state === 'open' ? ' on' : '');
+}
+
+function updateInstanceField(el) {
+  const instName = el.dataset.inst;
+  const field = el.dataset.field;
+  const value = el.value.trim();
+  const inst = instances.find(i => i.name === instName);
+  if (!inst) return;
+
+  if (field === 'role') {
+    inst.role = value;
+  } else if (field === 'name' && value && value !== instName) {
+    // Rename: update all references
+    const wasActive = currentInstance === instName;
+    inst.name = value;
+    if (wasActive) currentInstance = value;
+  }
+
+  saveInstances();
+  renderInstances();
+  updateSelector();
+  updateGroupInstanceSelect();
 }
 
 function toggleInstanceRole(name) {
