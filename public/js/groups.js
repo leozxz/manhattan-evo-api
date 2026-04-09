@@ -28,7 +28,7 @@ function initPitchSelect() {
 
 function switchMsgType(type) {
   selectedMsgType = type;
-  document.querySelectorAll('.msg-type-tab').forEach(t => t.classList.toggle('active', t.dataset.type === type));
+  document.querySelectorAll('.gc-toggle').forEach(t => t.classList.toggle('active', t.dataset.type === type));
   document.getElementById('msgTypeSingle').style.display = type === 'single' ? '' : 'none';
   document.getElementById('msgTypePitch').style.display = type === 'pitch' ? '' : 'none';
 }
