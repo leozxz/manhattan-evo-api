@@ -228,64 +228,93 @@ body {
   background: #fff; border-radius: 16px; padding: 0;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   border: 1px solid #eee;
-  position: relative;
-  overflow: visible;
+  position: relative; overflow: visible;
   transition: box-shadow 0.25s, transform 0.25s;
 }
 .ic:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.08); transform: translateY(-2px); }
 .ic.ic-active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,209,102,0.15), 0 4px 16px rgba(0,0,0,0.06); }
 
-/* ── 3D ribbon tags ── */
+/* ── Top: name left, ribbons stacked right ── */
+.ic-top {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 20px 20px 0;
+}
+.ic-name {
+  flex: 1; min-width: 0;
+  border: none; border-bottom: 1.5px solid transparent;
+  font-size: 17px; font-weight: 700; color: #111827;
+  padding: 4px 0; background: none; outline: none;
+  letter-spacing: -0.2px;
+  transition: border-color 0.2s;
+}
+.ic-name:focus { border-bottom-color: var(--accent); }
+.ic-name[readonly] { cursor: default; }
+
+/* ── 3D ribbon tags (stacked, right side) ── */
 .ic-ribbons {
-  display: flex; gap: 6px; padding: 0 16px;
-  position: relative; top: -11px; margin-bottom: -4px;
-  flex-wrap: wrap;
+  display: flex; flex-direction: column; gap: 5px;
+  align-items: flex-end; flex-shrink: 0;
+  margin-top: -8px; margin-right: -8px;
 }
 .ic-ribbon {
-  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
-  padding: 4px 12px; border-radius: 6px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 4px 14px 4px 10px; border-radius: 4px 0 0 4px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.12);
   position: relative;
 }
 .ic-ribbon::after {
   content: '';
-  position: absolute; bottom: -3px; left: 4px;
-  width: 8px; height: 3px;
-  background: inherit; filter: brightness(0.8);
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
-  border-radius: 0 0 2px 0;
+  position: absolute; top: 0; right: -6px;
+  border-left: 6px solid; border-top: 11px solid transparent;
+  border-bottom: 11px solid transparent;
+  border-left-color: inherit;
 }
-
-.ic-ribbon-open { background: #10b981; color: #fff; }
+.ic-ribbon-open { background: #10b981; color: #fff; border-left-color: #10b981; }
+.ic-ribbon-open::after { border-left-color: #10b981; }
 .ic-ribbon-closed { background: #ef4444; color: #fff; }
+.ic-ribbon-closed::after { border-left-color: #ef4444; }
 .ic-ribbon-connecting { background: #f59e0b; color: #fff; }
+.ic-ribbon-connecting::after { border-left-color: #f59e0b; }
 .ic-ribbon-role-admin { background: #6366f1; color: #fff; }
-.ic-ribbon-role-conversacional { background: #3b82f6; color: #fff; }
+.ic-ribbon-role-admin::after { border-left-color: #6366f1; }
+.ic-ribbon-role-conv { background: #3b82f6; color: #fff; }
+.ic-ribbon-role-conv::after { border-left-color: #3b82f6; }
 .ic-ribbon-active { background: #111827; color: #fff; }
+.ic-ribbon-active::after { border-left-color: #111827; }
 
-/* ── Card body (QR / checkmark) ── */
+/* ── Card body ── */
 .ic-body { padding: 8px 20px; min-height: 60px; }
 
-/* ── Editable fields ── */
-.ic-fields {
-  display: flex; gap: 10px; padding: 0 20px 16px;
+/* ── Role toggle (on/off switch) ── */
+.ic-toggle-row {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; padding: 10px 20px 14px;
 }
-.ic-field { flex: 1; }
-.ic-field label {
-  display: block; font-size: 10px; font-weight: 700;
-  color: #9ca3af; text-transform: uppercase; letter-spacing: 0.4px;
-  margin-bottom: 4px;
+.ic-toggle-label {
+  font-size: 11px; font-weight: 600; color: #c0c4cc;
+  transition: color 0.25s;
 }
-.ic-input {
-  width: 100%; padding: 7px 10px; border: 1px solid #e5e7eb;
-  border-radius: 8px; font-size: 13px; color: #111827;
-  background: #fafafa; outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+.ic-toggle-label-on { color: #111827; }
+
+.ic-switch {
+  position: relative; display: inline-block;
+  width: 44px; height: 24px; flex-shrink: 0;
 }
-.ic-input:focus {
-  border-color: var(--accent); background: #fff;
-  box-shadow: 0 0 0 3px rgba(0,209,102,0.10);
+.ic-switch input { opacity: 0; width: 0; height: 0; }
+.ic-slider {
+  position: absolute; inset: 0; cursor: pointer;
+  background: #3b82f6; border-radius: 24px;
+  transition: background 0.3s;
 }
+.ic-slider::before {
+  content: ''; position: absolute;
+  width: 18px; height: 18px; left: 3px; bottom: 3px;
+  background: #fff; border-radius: 50%;
+  transition: transform 0.3s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.ic-switch input:checked + .ic-slider { background: #6366f1; }
+.ic-switch input:checked + .ic-slider::before { transform: translateX(20px); }
 
 /* ── Actions ── */
 .ic-actions {

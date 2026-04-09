@@ -13,59 +13,57 @@ function renderInstances() {
     const stClass = inst.state === 'open' ? 'open' : inst.state === 'connecting' ? 'connecting' : 'closed';
     const stLabel = inst.state === 'open' ? 'Conectado' : inst.state === 'connecting' ? 'Aguardando QR' : 'Desconectado';
     const isActive = inst.name === currentInstance;
+    const isAdmin = role === 'admin';
 
     const card = document.createElement('div');
     card.className = 'ic' + (isActive ? ' ic-active' : '');
 
-    // ── Ribbon tags (3D labels that overflow the card) ──
+    // ── Top row: name (left) + ribbons stacked (right) ──
+    const topRow = document.createElement('div');
+    topRow.className = 'ic-top';
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'ic-name';
+    nameInput.value = inst.name;
+    nameInput.setAttribute('data-inst', inst.name);
+    nameInput.setAttribute('data-field', 'name');
+    nameInput.setAttribute('readonly', '');
+    nameInput.onfocus = function() { this.removeAttribute('readonly'); };
+    nameInput.onblur = function() { this.setAttribute('readonly', ''); };
+    nameInput.onchange = function() { updateInstanceField(this); };
+
     const ribbons = document.createElement('div');
     ribbons.className = 'ic-ribbons';
+    ribbons.innerHTML =
+      '<span class="ic-ribbon ic-ribbon-' + stClass + '">' + stLabel + '</span>' +
+      (isAdmin ? '<span class="ic-ribbon ic-ribbon-role-admin">Admin</span>' : '<span class="ic-ribbon ic-ribbon-role-conv">Conv</span>') +
+      (isActive ? '<span class="ic-ribbon ic-ribbon-active">Em uso</span>' : '');
 
-    const statusRibbon = document.createElement('span');
-    statusRibbon.className = 'ic-ribbon ic-ribbon-' + stClass;
-    statusRibbon.textContent = stLabel;
-    ribbons.appendChild(statusRibbon);
+    topRow.appendChild(nameInput);
+    topRow.appendChild(ribbons);
 
-    const roleRibbon = document.createElement('span');
-    roleRibbon.className = 'ic-ribbon ic-ribbon-role-' + role;
-    roleRibbon.textContent = role === 'admin' ? 'Admin' : 'Conversacional';
-    ribbons.appendChild(roleRibbon);
-
-    if (isActive) {
-      const activeRibbon = document.createElement('span');
-      activeRibbon.className = 'ic-ribbon ic-ribbon-active';
-      activeRibbon.textContent = 'Em uso';
-      ribbons.appendChild(activeRibbon);
-    }
-
-    // ── Card body ──
+    // ── Card body (QR / checkmark) ──
     const body = document.createElement('div');
     body.className = 'ic-body';
     body.id = 'card-body-' + safeName;
 
     if (inst.state === 'open') {
-      body.innerHTML = '<div style="text-align:center;color:#25d366;padding:12px 0"><svg width="44" height="44" viewBox="0 0 24 24" fill="#25d366"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>';
+      body.innerHTML = '<div style="text-align:center;color:#25d366;padding:8px 0"><svg width="40" height="40" viewBox="0 0 24 24" fill="#25d366"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>';
     } else {
       body.innerHTML = '<div class="qr-container" id="qr-' + safeName + '"><span class="qr-placeholder">Clique "Conectar" para gerar QR Code</span></div>';
     }
 
-    // ── Editable fields ──
-    const fields = document.createElement('div');
-    fields.className = 'ic-fields';
-
-    // Name
-    fields.innerHTML = `
-      <div class="ic-field">
-        <label>Nome</label>
-        <input type="text" value="${inst.name}" class="ic-input" data-inst="${inst.name}" data-field="name" onchange="updateInstanceField(this)" readonly onfocus="this.removeAttribute('readonly')" onblur="this.setAttribute('readonly','')">
-      </div>
-      <div class="ic-field">
-        <label>Tipo</label>
-        <select class="ic-input" data-inst="${inst.name}" data-field="role" onchange="updateInstanceField(this)">
-          <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
-          <option value="conversacional" ${role === 'conversacional' ? 'selected' : ''}>Conversacional</option>
-        </select>
-      </div>
+    // ── Role toggle (on/off switch) ──
+    const toggleRow = document.createElement('div');
+    toggleRow.className = 'ic-toggle-row';
+    toggleRow.innerHTML = `
+      <span class="ic-toggle-label ${!isAdmin ? 'ic-toggle-label-on' : ''}">Conversacional</span>
+      <label class="ic-switch">
+        <input type="checkbox" ${isAdmin ? 'checked' : ''} onchange="toggleInstanceRole('${inst.name}')">
+        <span class="ic-slider"></span>
+      </label>
+      <span class="ic-toggle-label ${isAdmin ? 'ic-toggle-label-on' : ''}">Admin</span>
     `;
 
     // ── Actions ──
@@ -84,9 +82,9 @@ function renderInstances() {
     }
     actions.innerHTML += `<button class="btn btn-secondary btn-sm" onclick="deleteInstance('${inst.name}')">Remover</button>`;
 
-    card.appendChild(ribbons);
+    card.appendChild(topRow);
     card.appendChild(body);
-    card.appendChild(fields);
+    card.appendChild(toggleRow);
     card.appendChild(actions);
     grid.appendChild(card);
   });
