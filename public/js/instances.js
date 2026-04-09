@@ -54,16 +54,15 @@ function renderInstances() {
       body.innerHTML = '<div class="qr-container" id="qr-' + safeName + '"><span class="qr-placeholder">Clique "Conectar" para gerar QR Code</span></div>';
     }
 
-    // ── Role toggle (on/off switch) ──
+    // ── Role segmented toggle ──
     const toggleRow = document.createElement('div');
     toggleRow.className = 'ic-toggle-row';
     toggleRow.innerHTML = `
-      <span class="ic-toggle-label ${!isAdmin ? 'ic-toggle-label-on' : ''}">Conversacional</span>
-      <label class="ic-switch">
-        <input type="checkbox" ${isAdmin ? 'checked' : ''} onchange="toggleInstanceRole('${inst.name}')">
-        <span class="ic-slider"></span>
-      </label>
-      <span class="ic-toggle-label ${isAdmin ? 'ic-toggle-label-on' : ''}">Admin</span>
+      <div class="ic-seg" data-active="${role}" data-inst="${inst.name}">
+        <div class="ic-seg-slider"></div>
+        <button class="ic-seg-btn ${!isAdmin ? 'ic-seg-active' : ''}" onclick="setInstanceRole('${inst.name}','conversacional')">Conversacional</button>
+        <button class="ic-seg-btn ${isAdmin ? 'ic-seg-active' : ''}" onclick="setInstanceRole('${inst.name}','admin')">Admin</button>
+      </div>
     `;
 
     // ── Actions ──
@@ -455,6 +454,32 @@ function updateInstanceField(el) {
 
   saveInstances();
   renderInstances();
+  updateSelector();
+  updateGroupInstanceSelect();
+}
+
+function setInstanceRole(name, newRole) {
+  const inst = instances.find(i => i.name === name);
+  if (!inst || inst.role === newRole) return;
+  inst.role = newRole;
+  saveInstances();
+
+  // Animate the segmented toggle without full re-render
+  const seg = document.querySelector('.ic-seg[data-inst="' + name + '"]');
+  if (seg) {
+    seg.dataset.active = newRole;
+    seg.querySelectorAll('.ic-seg-btn').forEach((btn, i) => {
+      btn.classList.toggle('ic-seg-active', (i === 0 && newRole === 'conversacional') || (i === 1 && newRole === 'admin'));
+    });
+    // Update the role ribbon
+    const card = seg.closest('.ic');
+    const roleRibbon = card?.querySelector('.ic-ribbon-role-admin, .ic-ribbon-role-conv');
+    if (roleRibbon) {
+      roleRibbon.className = 'ic-ribbon ic-ribbon-role-' + (newRole === 'admin' ? 'admin' : 'conv');
+      roleRibbon.textContent = newRole === 'admin' ? 'Admin' : 'Conv';
+    }
+  }
+
   updateSelector();
   updateGroupInstanceSelect();
 }

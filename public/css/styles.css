@@ -220,7 +220,7 @@ body {
 /* Connect page */
 .instances-grid {
   display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 24px; max-width: 1100px; margin: 0 auto;
+  gap: 28px; max-width: 1200px; margin: 0 auto;
 }
 
 /* ── Instance card ── */
@@ -250,71 +250,74 @@ body {
 .ic-name:focus { border-bottom-color: var(--accent); }
 .ic-name[readonly] { cursor: default; }
 
-/* ── 3D ribbon tags (stacked, right side) ── */
+/* ── 3D ribbon tags (stacked, overflow right edge) ── */
 .ic-ribbons {
   display: flex; flex-direction: column; gap: 5px;
   align-items: flex-end; flex-shrink: 0;
-  margin-top: -8px; margin-right: -8px;
+  margin-right: -21px;
+  margin-top: -8px;
 }
 .ic-ribbon {
   font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;
-  padding: 4px 14px 4px 10px; border-radius: 4px 0 0 4px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.12);
+  padding: 5px 12px 5px 10px;
+  border-radius: 4px 0 0 4px;
+  box-shadow: -1px 2px 5px rgba(0,0,0,0.15);
   position: relative;
 }
+/* 3D fold under the ribbon */
 .ic-ribbon::after {
   content: '';
-  position: absolute; top: 0; right: -6px;
-  border-left: 6px solid; border-top: 11px solid transparent;
-  border-bottom: 11px solid transparent;
-  border-left-color: inherit;
+  position: absolute; right: 0; bottom: -5px;
+  width: 0; height: 0;
+  border-top: 5px solid; border-right: 6px solid transparent;
 }
-.ic-ribbon-open { background: #10b981; color: #fff; border-left-color: #10b981; }
-.ic-ribbon-open::after { border-left-color: #10b981; }
+.ic-ribbon-open { background: #10b981; color: #fff; }
+.ic-ribbon-open::after { border-top-color: #0a8c62; }
 .ic-ribbon-closed { background: #ef4444; color: #fff; }
-.ic-ribbon-closed::after { border-left-color: #ef4444; }
+.ic-ribbon-closed::after { border-top-color: #b91c1c; }
 .ic-ribbon-connecting { background: #f59e0b; color: #fff; }
-.ic-ribbon-connecting::after { border-left-color: #f59e0b; }
+.ic-ribbon-connecting::after { border-top-color: #b45309; }
 .ic-ribbon-role-admin { background: #6366f1; color: #fff; }
-.ic-ribbon-role-admin::after { border-left-color: #6366f1; }
+.ic-ribbon-role-admin::after { border-top-color: #4338ca; }
 .ic-ribbon-role-conv { background: #3b82f6; color: #fff; }
-.ic-ribbon-role-conv::after { border-left-color: #3b82f6; }
+.ic-ribbon-role-conv::after { border-top-color: #1d4ed8; }
 .ic-ribbon-active { background: #111827; color: #fff; }
-.ic-ribbon-active::after { border-left-color: #111827; }
+.ic-ribbon-active::after { border-top-color: #000; }
 
 /* ── Card body ── */
 .ic-body { padding: 8px 20px; min-height: 60px; }
 
-/* ── Role toggle (on/off switch) ── */
+/* ── Role segmented toggle ── */
 .ic-toggle-row {
   display: flex; align-items: center; justify-content: center;
-  gap: 10px; padding: 10px 20px 14px;
+  padding: 8px 20px 14px;
 }
-.ic-toggle-label {
-  font-size: 11px; font-weight: 600; color: #c0c4cc;
-  transition: color 0.25s;
+.ic-seg {
+  display: flex; position: relative;
+  background: #f3f4f6; border-radius: 10px;
+  padding: 3px; width: 100%;
 }
-.ic-toggle-label-on { color: #111827; }
-
-.ic-switch {
-  position: relative; display: inline-block;
-  width: 44px; height: 24px; flex-shrink: 0;
+.ic-seg-btn {
+  flex: 1; position: relative; z-index: 1;
+  padding: 8px 0; border: none; background: none;
+  font-size: 12px; font-weight: 700; color: #9ca3af;
+  cursor: pointer; transition: color 0.3s;
+  text-align: center;
 }
-.ic-switch input { opacity: 0; width: 0; height: 0; }
-.ic-slider {
-  position: absolute; inset: 0; cursor: pointer;
-  background: #3b82f6; border-radius: 24px;
-  transition: background 0.3s;
+.ic-seg-btn.ic-seg-active { color: #fff; }
+/* Sliding pill behind active button */
+.ic-seg-slider {
+  position: absolute; top: 3px; bottom: 3px;
+  width: calc(50% - 3px); border-radius: 8px;
+  transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.35s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
 }
-.ic-slider::before {
-  content: ''; position: absolute;
-  width: 18px; height: 18px; left: 3px; bottom: 3px;
-  background: #fff; border-radius: 50%;
-  transition: transform 0.3s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+.ic-seg[data-active="conversacional"] .ic-seg-slider {
+  left: 3px; background: #3b82f6;
 }
-.ic-switch input:checked + .ic-slider { background: #6366f1; }
-.ic-switch input:checked + .ic-slider::before { transform: translateX(20px); }
+.ic-seg[data-active="admin"] .ic-seg-slider {
+  left: calc(50%); background: #6366f1;
+}
 
 /* ── Actions ── */
 .ic-actions {
