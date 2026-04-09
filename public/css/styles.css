@@ -254,7 +254,7 @@ body {
 .ic-ribbons {
   display: flex; flex-direction: column; gap: 5px;
   align-items: flex-end; flex-shrink: 0;
-  margin-right: -21px;
+  margin-right: -23px;
   margin-top: -8px;
 }
 .ic-ribbon {
