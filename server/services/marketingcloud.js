@@ -1,11 +1,11 @@
 const https = require('https');
 const http = require('http');
 
-const MC_AUTH_URL = process.env.MC_AUTH_URL || 'https://mcn29v1t3hsj32w921hh7z9yz2xm.auth.marketingcloudapis.com';
-const MC_REST_URL = process.env.MC_REST_URL || 'https://mcn29v1t3hsj32w921hh7z9yz2xm.rest.marketingcloudapis.com';
-const MC_CLIENT_ID = process.env.MC_CLIENT_ID || '';
-const MC_CLIENT_SECRET = process.env.MC_CLIENT_SECRET || '';
-const MC_ACCOUNT_ID = process.env.MC_ACCOUNT_ID || '';
+const MC_AUTH_URL = process.env.SFMC_AUTH_URL || process.env.MC_AUTH_URL || 'https://mcn29v1t3hsj32w921hh7z9yz2xm.auth.marketingcloudapis.com';
+const MC_REST_URL = process.env.SFMC_REST_URL || process.env.MC_REST_URL || 'https://mcn29v1t3hsj32w921hh7z9yz2xm.rest.marketingcloudapis.com';
+const MC_CLIENT_ID = process.env.SFMC_CLIENT_ID || process.env.MC_CLIENT_ID || '';
+const MC_CLIENT_SECRET = process.env.SFMC_CLIENT_SECRET || process.env.MC_CLIENT_SECRET || '';
+const MC_ACCOUNT_ID = process.env.SFMC_MID || process.env.MC_ACCOUNT_ID || '';
 
 let cachedToken = null;
 let tokenExpiry = 0;
@@ -61,7 +61,7 @@ async function sendWhatsAppCode(phone, email, code) {
       'Content-Type': 'application/json',
     },
   }, JSON.stringify({
-    definitionKey: 'auth_manhattan',
+    definitionKey: process.env.SFMC_CUSTOMER_KEY || 'auth_manhattan',
     recipients: [{
       contactKey: email,
       to: phone,
@@ -79,7 +79,7 @@ async function sendWhatsAppCode(phone, email, code) {
 }
 
 function isConfigured() {
-  return !!(MC_CLIENT_ID && MC_CLIENT_SECRET && MC_ACCOUNT_ID);
+  return !!(MC_CLIENT_ID && MC_CLIENT_SECRET);
 }
 
 module.exports = { sendWhatsAppCode, isConfigured };
