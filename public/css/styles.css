@@ -234,13 +234,13 @@ body {
 .ic:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.08); transform: translateY(-2px); }
 .ic.ic-active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,209,102,0.15), 0 4px 16px rgba(0,0,0,0.06); }
 
-/* ── Top: name left, ribbons stacked right ── */
+/* ── Top: name left, ribbons absolute right ── */
 .ic-top {
-  display: flex; align-items: flex-start; gap: 12px;
+  position: relative;
   padding: 20px 20px 0;
 }
 .ic-name {
-  flex: 1; min-width: 0;
+  width: calc(100% - 110px);
   border: none; border-bottom: 1.5px solid transparent;
   font-size: 17px; font-weight: 700; color: #111827;
   padding: 4px 0; background: none; outline: none;
@@ -250,12 +250,11 @@ body {
 .ic-name:focus { border-bottom-color: var(--accent); }
 .ic-name[readonly] { cursor: default; }
 
-/* ── 3D ribbon tags (stacked, overflow right edge) ── */
+/* ── 3D ribbon tags (absolute, stacked right edge) ── */
 .ic-ribbons {
+  position: absolute; top: 12px; right: -5px;
   display: flex; flex-direction: column; gap: 5px;
-  align-items: flex-end; flex-shrink: 0;
-  margin-right: -25px;
-  margin-top: -8px;
+  align-items: flex-end;
 }
 .ic-ribbon {
   font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;
