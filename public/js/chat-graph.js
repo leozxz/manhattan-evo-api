@@ -21,12 +21,6 @@ let _graphData = null; // shared for AI queries
 function toggleGraphFullscreen(btn) {
   const modal = btn.closest('.graph-modal');
   modal.classList.toggle('graph-modal-fullscreen');
-  const canvas = modal.querySelector('canvas');
-  if (canvas) {
-    const container = canvas.parentElement;
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
-  }
   // Toggle icon between expand and shrink
   const isFs = modal.classList.contains('graph-modal-fullscreen');
   btn.innerHTML = isFs
@@ -84,7 +78,17 @@ async function openKnowledgeGraph() {
 
 function renderGraph(canvas, data, contactName) {
   const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
+  let W = canvas.width, H = canvas.height;
+
+  function resizeCanvas() {
+    const container = canvas.parentElement;
+    if (!container) return;
+    const cw = container.clientWidth, ch = container.clientHeight;
+    if (cw !== W || ch !== H) {
+      canvas.width = cw; canvas.height = ch;
+      W = cw; H = ch;
+    }
+  }
 
   let cam = { x: 0, y: 0, zoom: 1 };
   function worldToScreen(wx, wy) { return { x: (wx - cam.x) * cam.zoom + W / 2, y: (wy - cam.y) * cam.zoom + H / 2 }; }
@@ -407,7 +411,7 @@ function renderGraph(canvas, data, contactName) {
   }
 
   let animFrame;
-  function loop() { if (simRunning) simulate(); animateCamera(); draw(); animFrame = requestAnimationFrame(loop); }
+  function loop() { resizeCanvas(); if (simRunning) simulate(); animateCamera(); draw(); animFrame = requestAnimationFrame(loop); }
   loop();
   const observer = new MutationObserver(() => { if (!document.body.contains(canvas)) { cancelAnimationFrame(animFrame); observer.disconnect(); } });
   observer.observe(document.body, { childList: true });
