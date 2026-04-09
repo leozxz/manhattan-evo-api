@@ -18,6 +18,22 @@ async function resetKnowledgeGraph() {
 
 let _graphData = null; // shared for AI queries
 
+function toggleGraphFullscreen(btn) {
+  const modal = btn.closest('.graph-modal');
+  modal.classList.toggle('graph-modal-fullscreen');
+  const canvas = modal.querySelector('canvas');
+  if (canvas) {
+    const container = canvas.parentElement;
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+  }
+  // Toggle icon between expand and shrink
+  const isFs = modal.classList.contains('graph-modal-fullscreen');
+  btn.innerHTML = isFs
+    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="#54656f"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>'
+    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="#54656f"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>';
+}
+
 async function openKnowledgeGraph() {
   const res = await api('GET', '/knowledge/contact/' + currentInstance + '?remoteJid=' + encodeURIComponent(selectedGroup));
   if (!res.ok || !res.data || !res.data.entities || res.data.entities.length === 0) {
@@ -39,6 +55,9 @@ async function openKnowledgeGraph() {
       <div style="display:flex;gap:6px">
         <button class="btn btn-secondary btn-sm" onclick="resetKnowledgeGraph()" title="Regerar">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="#54656f"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        </button>
+        <button class="btn btn-secondary btn-sm graph-fullscreen-btn" onclick="toggleGraphFullscreen(this)" title="Tela cheia">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#54656f"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
         </button>
         <button class="btn btn-secondary btn-sm" onclick="this.closest('.graph-modal-overlay').remove()">&times;</button>
       </div>
@@ -197,20 +216,91 @@ function renderGraph(canvas, data, contactName) {
     return null;
   }
 
+  // ---- Animated particles on edges ----
+  const particles = [];
+  const PARTICLE_SPEED = 0.0004;
+  const PARTICLE_COUNT_HIERARCHY = 2;
+  const PARTICLE_COUNT_RELATION = 1;
+  edges.forEach(e => {
+    const count = e.type === 'hierarchy' ? PARTICLE_COUNT_HIERARCHY : PARTICLE_COUNT_RELATION;
+    for (let i = 0; i < count; i++) {
+      particles.push({ edge: e, t: Math.random(), speed: PARTICLE_SPEED + Math.random() * 0.0002 });
+    }
+  });
+
   // ---- Drawing ----
+  function getEdgeCurvePoint(s1, s2, e, t) {
+    if (e.type === 'relation') {
+      const mx = (s1.x + s2.x) / 2 - (s2.y - s1.y) * 0.12;
+      const my = (s1.y + s2.y) / 2 + (s2.x - s1.x) * 0.12;
+      const u = 1 - t;
+      return { x: u * u * s1.x + 2 * u * t * mx + t * t * s2.x, y: u * u * s1.y + 2 * u * t * my + t * t * s2.y };
+    }
+    return { x: s1.x + (s2.x - s1.x) * t, y: s1.y + (s2.y - s1.y) * t };
+  }
+
   function drawEdge(e, highlight) {
     const op = edgeOpacity(e); if (op < 0.01) return;
     const s1 = worldToScreen(e.from.x, e.from.y), s2 = worldToScreen(e.to.x, e.to.y);
     ctx.globalAlpha = highlight ? 1 : op;
+
+    // Draw the main line/curve
     ctx.beginPath(); ctx.moveTo(s1.x, s1.y);
-    if (e.type === 'relation') { const mx = (s1.x + s2.x) / 2, my = (s1.y + s2.y) / 2; ctx.quadraticCurveTo(mx - (s2.y - s1.y) * 0.12, my + (s2.x - s1.x) * 0.12, s2.x, s2.y); }
-    else ctx.lineTo(s2.x, s2.y);
+    if (e.type === 'relation') {
+      const mx = (s1.x + s2.x) / 2, my = (s1.y + s2.y) / 2;
+      ctx.quadraticCurveTo(mx - (s2.y - s1.y) * 0.12, my + (s2.x - s1.x) * 0.12, s2.x, s2.y);
+    } else {
+      ctx.lineTo(s2.x, s2.y);
+    }
     ctx.strokeStyle = e.color + (highlight ? 'cc' : (e.type === 'hierarchy' ? '50' : '70'));
     ctx.lineWidth = (highlight ? 2.5 : (e.type === 'hierarchy' ? 1.2 : 0.8)) * cam.zoom;
-    if (e.type === 'relation') ctx.setLineDash([5 * cam.zoom, 3 * cam.zoom]); else ctx.setLineDash([]);
-    ctx.stroke(); ctx.setLineDash([]);
-    if (e.label && highlight && cam.zoom > 0.6) { ctx.font = (9 * cam.zoom) + 'px -apple-system,sans-serif'; ctx.fillStyle = e.color; ctx.textAlign = 'center'; ctx.fillText(e.label, (s1.x + s2.x) / 2, (s1.y + s2.y) / 2 - 8 * cam.zoom); }
+    ctx.setLineDash([]);
+    ctx.stroke();
+
+    // Draw arrowhead at ~85% of the way
+    const arrowT = 0.82;
+    const arrowP = getEdgeCurvePoint(s1, s2, e, arrowT);
+    const arrowP2 = getEdgeCurvePoint(s1, s2, e, arrowT + 0.03);
+    const angle = Math.atan2(arrowP2.y - arrowP.y, arrowP2.x - arrowP.x);
+    const arrowSize = (highlight ? 7 : 5) * cam.zoom;
+    ctx.beginPath();
+    ctx.moveTo(arrowP2.x, arrowP2.y);
+    ctx.lineTo(arrowP2.x - arrowSize * Math.cos(angle - 0.45), arrowP2.y - arrowSize * Math.sin(angle - 0.45));
+    ctx.lineTo(arrowP2.x - arrowSize * Math.cos(angle + 0.45), arrowP2.y - arrowSize * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fillStyle = e.color + (highlight ? 'dd' : '80');
+    ctx.fill();
+
+    // Edge label
+    if (e.label && highlight && cam.zoom > 0.6) {
+      ctx.font = (9 * cam.zoom) + 'px -apple-system,sans-serif';
+      ctx.fillStyle = e.color; ctx.textAlign = 'center';
+      ctx.fillText(e.label, (s1.x + s2.x) / 2, (s1.y + s2.y) / 2 - 8 * cam.zoom);
+    }
     ctx.globalAlpha = 1;
+  }
+
+  function drawParticles() {
+    const now = Date.now();
+    particles.forEach(p => {
+      const op = edgeOpacity(p.edge);
+      if (op < 0.05) return;
+      p.t = (p.t + p.speed * 16) % 1; // advance position
+      const s1 = worldToScreen(p.edge.from.x, p.edge.from.y);
+      const s2 = worldToScreen(p.edge.to.x, p.edge.to.y);
+      const pos = getEdgeCurvePoint(s1, s2, p.edge, p.t);
+      const size = (2.5 + Math.sin(now / 400 + p.t * 6) * 0.8) * cam.zoom;
+      ctx.globalAlpha = op * (0.5 + Math.sin(p.t * Math.PI) * 0.5);
+      const grad = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, size * 2.5);
+      grad.addColorStop(0, p.edge.color + 'cc');
+      grad.addColorStop(0.5, p.edge.color + '44');
+      grad.addColorStop(1, p.edge.color + '00');
+      ctx.beginPath(); ctx.arc(pos.x, pos.y, size * 2.5, 0, 2 * Math.PI);
+      ctx.fillStyle = grad; ctx.fill();
+      ctx.beginPath(); ctx.arc(pos.x, pos.y, size, 0, 2 * Math.PI);
+      ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.globalAlpha = 1;
+    });
   }
 
   function drawNode(n, highlight) {
@@ -236,29 +326,31 @@ function renderGraph(canvas, data, contactName) {
     }
 
     const dimmed = op < 0.5; // node is filtered out
-    ctx.shadowColor = dimmed ? 'transparent' : 'rgba(0,0,0,' + (n.type === 'contact' ? '0.2' : '0.08') + ')';
-    ctx.shadowBlur = dimmed ? 0 : (n.type === 'contact' ? 12 : 6) * cam.zoom;
-    ctx.shadowOffsetY = dimmed ? 0 : 2 * cam.zoom;
+    ctx.shadowColor = dimmed ? 'transparent' : (n.color + '60');
+    ctx.shadowBlur = dimmed ? 0 : (n.type === 'contact' ? 20 : 12) * cam.zoom;
+    ctx.shadowOffsetY = 0;
     ctx.globalAlpha = dimmed ? 0.15 : 1;
     ctx.beginPath(); ctx.arc(s.x, s.y, sr, 0, 2 * Math.PI);
 
     if (n.type === 'contact') {
-      const grad = ctx.createLinearGradient(s.x - sr, s.y - sr, s.x + sr, s.y + sr);
-      grad.addColorStop(0, '#1a1d23'); grad.addColorStop(1, '#2d3139');
+      const grad = ctx.createRadialGradient(s.x - sr * 0.3, s.y - sr * 0.3, 0, s.x, s.y, sr);
+      grad.addColorStop(0, '#2a2d35'); grad.addColorStop(1, '#1a1d23');
       ctx.fillStyle = grad; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5 * cam.zoom; ctx.stroke();
     } else if (n.type === 'category') {
-      ctx.fillStyle = dimmed ? '#d1d5db' : n.color;
-      ctx.fill();
+      const grad = ctx.createRadialGradient(s.x - sr * 0.3, s.y - sr * 0.3, 0, s.x, s.y, sr);
+      grad.addColorStop(0, dimmed ? '#555' : n.color); grad.addColorStop(1, dimmed ? '#444' : n.color + 'bb');
+      ctx.fillStyle = grad; ctx.fill();
     } else {
-      ctx.fillStyle = dimmed ? '#f3f4f6' : '#fff'; ctx.fill();
+      ctx.fillStyle = dimmed ? '#2a2d35' : '#1e2028'; ctx.fill();
       ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-      ctx.strokeStyle = dimmed ? '#d1d5db' : (isAiMatch ? '#8b5cf6' : n.color);
+      ctx.strokeStyle = dimmed ? '#444' : (isAiMatch ? '#8b5cf6' : n.color);
       ctx.lineWidth = (isAiMatch ? 3 : 2) * cam.zoom; ctx.stroke();
     }
     ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
 
     if (n.type !== 'entity') {
-      ctx.fillStyle = dimmed ? '#9ca3af' : '#fff';
+      ctx.fillStyle = dimmed ? '#666' : '#fff';
       ctx.font = '600 ' + (n.type === 'contact' ? 13 : 10) * cam.zoom + 'px -apple-system,sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const maxC = Math.floor(n.r * 2 / (n.type === 'contact' ? 8 : 6));
@@ -266,7 +358,7 @@ function renderGraph(canvas, data, contactName) {
     }
 
     if (n.type === 'entity' && cam.zoom > 0.4) {
-      ctx.fillStyle = dimmed ? '#ccc' : '#333';
+      ctx.fillStyle = dimmed ? '#555' : '#ccc';
       ctx.font = (10 * cam.zoom) + 'px -apple-system,sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       const maxW = 110 * cam.zoom, words = n.label.split(' ');
@@ -279,13 +371,13 @@ function renderGraph(canvas, data, contactName) {
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    const bgGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.6);
-    bgGrad.addColorStop(0, '#f0f2f5'); bgGrad.addColorStop(1, '#f8f9fb');
+    const bgGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
+    bgGrad.addColorStop(0, '#0f1117'); bgGrad.addColorStop(0.6, '#141820'); bgGrad.addColorStop(1, '#0a0c10');
     ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
 
     if (cam.zoom > 0.3) {
       const tl = screenToWorld(0, 0), br = screenToWorld(W, H);
-      ctx.fillStyle = '#ddd';
+      ctx.fillStyle = 'rgba(255,255,255,0.04)';
       for (let gx = Math.floor(tl.x / 50) * 50; gx < br.x; gx += 50)
         for (let gy = Math.floor(tl.y / 50) * 50; gy < br.y; gy += 50) { const sp = worldToScreen(gx, gy); ctx.beginPath(); ctx.arc(sp.x, sp.y, 1, 0, 2 * Math.PI); ctx.fill(); }
     }
@@ -293,6 +385,7 @@ function renderGraph(canvas, data, contactName) {
     const hlEdges = new Set(), hlNodes = new Set();
     if (hoveredNode) { hlNodes.add(hoveredNode); edges.forEach((e, i) => { if (e.from === hoveredNode || e.to === hoveredNode) { hlEdges.add(i); hlNodes.add(e.from); hlNodes.add(e.to); } }); }
     edges.forEach((e, i) => drawEdge(e, hlEdges.has(i)));
+    drawParticles();
     nodes.forEach(n => drawNode(n, hlNodes.size === 0 || hlNodes.has(n)));
 
     if (tooltip.visible && tooltip.lines.length > 0) {
@@ -303,12 +396,13 @@ function renderGraph(canvas, data, contactName) {
       let tx = tooltip.x + 20, ty = tooltip.y - boxH / 2;
       if (tx + maxW > W) tx = tooltip.x - maxW - 20;
       if (ty < 4) ty = 4; if (ty + boxH > H - 4) ty = H - boxH - 4;
-      ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,0.12)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 4;
-      ctx.beginPath(); ctx.roundRect(tx, ty, maxW, boxH, 10); ctx.fill();
+      ctx.fillStyle = '#1e2028'; ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 20; ctx.shadowOffsetY = 4;
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.beginPath(); ctx.roundRect(tx, ty, maxW, boxH, 10); ctx.fill(); ctx.stroke();
       ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-      tooltip.lines.forEach((line, i) => { ctx.font = line.bold ? '600 12px -apple-system,sans-serif' : '11px -apple-system,sans-serif'; ctx.fillStyle = line.color || '#333'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(line.text, tx + pad, ty + pad + i * lineH); });
+      tooltip.lines.forEach((line, i) => { ctx.font = line.bold ? '600 12px -apple-system,sans-serif' : '11px -apple-system,sans-serif'; ctx.fillStyle = line.color || '#ccc'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(line.text, tx + pad, ty + pad + i * lineH); });
     }
-    ctx.fillStyle = '#bbb'; ctx.font = '10px -apple-system,sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = '10px -apple-system,sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
     ctx.fillText(Math.round(cam.zoom * 100) + '%', W - 12, H - 8);
   }
 
