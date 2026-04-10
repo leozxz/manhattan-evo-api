@@ -608,7 +608,15 @@ async function loadParticipants() {
         <div class="panel-member-role">${displayName ? escapeHtml(phoneFormatted) : 'Membro'}</div>
       </div>
       ${!isSuperAdmin ? '<button class="panel-member-remove" onclick="removeMember(\'' + escapeHtml(phoneRaw) + '\')" title="Remover">&times;</button>' : ''}
+      <button class="panel-member-graph" title="Ver perfil" onclick="event.stopPropagation(); openParticipantGraph('${escapeHtml(jid)}', '${escapeHtml(displayName || phoneFormatted)}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2z"/></svg>
+      </button>
     `;
+    el.style.cursor = 'pointer';
+    el.onclick = (e) => {
+      if (e.target.closest('.panel-member-remove') || e.target.closest('.panel-member-graph')) return;
+      openParticipantGraph(jid, displayName || phoneFormatted);
+    };
     list.appendChild(el);
   });
   body.appendChild(list);

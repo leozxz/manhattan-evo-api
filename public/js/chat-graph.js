@@ -18,6 +18,69 @@ async function resetKnowledgeGraph() {
 
 let _graphData = null; // shared for AI queries
 
+async function openParticipantGraph(jid, name) {
+  if (!currentInstance) return toast('Sem instancia conectada', 'error');
+
+  // Try to get existing knowledge
+  const res = await api('GET', '/knowledge/contact/' + currentInstance + '?remoteJid=' + encodeURIComponent(jid));
+
+  if (!res.ok || !res.data || !res.data.entities || res.data.entities.length === 0) {
+    // No data yet — offer to extract
+    toast('Extraindo perfil de ' + name + '...');
+    await api('POST', '/knowledge/extract/' + currentInstance, { remoteJid: jid, messageCount: 50 });
+    // Try again
+    const res2 = await api('GET', '/knowledge/contact/' + currentInstance + '?remoteJid=' + encodeURIComponent(jid));
+    if (!res2.ok || !res2.data || !res2.data.entities || res2.data.entities.length === 0) {
+      toast('Nenhum dado encontrado para ' + name, 'error');
+      return;
+    }
+    _graphData = res2.data;
+  } else {
+    _graphData = res.data;
+  }
+
+  const contactName = name || _graphData.pushName || _graphData.savedName || jid.split('@')[0];
+
+  // Remove existing overlay if any
+  const existing = document.querySelector('.graph-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'graph-modal-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  const modal = document.createElement('div');
+  modal.className = 'graph-modal';
+  modal.innerHTML = `
+    <div class="graph-modal-header">
+      <span>Perfil: ${escapeHtml(contactName)}</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-secondary btn-sm graph-fullscreen-btn" onclick="toggleGraphFullscreen(this)" title="Tela cheia">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#54656f"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="this.closest('.graph-modal-overlay').remove()">&times;</button>
+      </div>
+    </div>
+    <div class="graph-modal-body"><canvas id="knowledgeCanvas"></canvas></div>
+    <div class="graph-ai-bar" id="graphAiBar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="#8b5cf6" style="flex-shrink:0"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2zm8 6l-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3zm-4 8l-1.5 4.5L8 22l-1.5-1.5L2 19l4.5-1.5L8 13l1.5 4.5z"/></svg>
+      <input type="text" id="graphAiInput" placeholder="Pergunte sobre o cliente..." style="flex:1;border:none;background:none;outline:none;font-size:12px;color:var(--text)">
+      <div id="graphAiStatus" style="font-size:11px;color:var(--text-muted);display:none"></div>
+    </div>
+    <div class="graph-legend" id="graphLegend"></div>
+  `;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  requestAnimationFrame(() => {
+    const canvas = document.getElementById('knowledgeCanvas');
+    const container = canvas.parentElement;
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+    renderGraph(canvas, _graphData, contactName);
+  });
+}
+
 function toggleGraphFullscreen(btn) {
   const modal = btn.closest('.graph-modal');
   modal.classList.toggle('graph-modal-fullscreen');

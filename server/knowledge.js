@@ -103,6 +103,37 @@ async function initTables() {
     CREATE INDEX IF NOT EXISTS idx_ct_contact ON "ContactTask"("contactKnowledgeId");
     CREATE INDEX IF NOT EXISTS idx_ct_status ON "ContactTask"(status);
 
+    -- Migration: make knowledge instance-independent (scope by remoteJid only)
+    -- Step 1: Merge duplicate remoteJids (keep the one with most entities)
+    DELETE FROM "ContactKnowledge" WHERE id IN (
+      SELECT ck.id FROM "ContactKnowledge" ck
+      WHERE EXISTS (
+        SELECT 1 FROM "ContactKnowledge" ck2
+        WHERE ck2."remoteJid" = ck."remoteJid" AND ck2.id != ck.id
+          AND (SELECT COUNT(*) FROM "KnowledgeEntity" WHERE "contactKnowledgeId" = ck2.id)
+            > (SELECT COUNT(*) FROM "KnowledgeEntity" WHERE "contactKnowledgeId" = ck.id)
+      )
+    );
+    -- Step 2: If still duplicates (same entity count), keep most recent
+    DELETE FROM "ContactKnowledge" WHERE id IN (
+      SELECT ck.id FROM "ContactKnowledge" ck
+      WHERE EXISTS (
+        SELECT 1 FROM "ContactKnowledge" ck2
+        WHERE ck2."remoteJid" = ck."remoteJid" AND ck2.id != ck.id
+          AND ck2."updatedAt" > ck."updatedAt"
+      )
+    );
+    -- Step 3: Drop old constraint and add new one on remoteJid only
+    DO $$ BEGIN
+      ALTER TABLE "ContactKnowledge" DROP CONSTRAINT IF EXISTS "ContactKnowledge_remoteJid_instanceId_key";
+    EXCEPTION WHEN undefined_object THEN NULL;
+    END $$;
+    DO $$ BEGIN
+      ALTER TABLE "ContactKnowledge" ADD CONSTRAINT ck_unique_jid UNIQUE ("remoteJid");
+    EXCEPTION WHEN duplicate_table THEN NULL;
+    WHEN duplicate_object THEN NULL;
+    END $$;
+
     CREATE TABLE IF NOT EXISTS "PanelUser" (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       username VARCHAR(100) NOT NULL UNIQUE,
@@ -293,8 +324,8 @@ function evoRequest(method, path, body) {
 // =====================
 async function getExistingKnowledge(db, instanceId, remoteJid) {
   const ck = await db.query(
-    'SELECT * FROM "ContactKnowledge" WHERE "remoteJid" = $1 AND "instanceId" = $2',
-    [remoteJid, instanceId]
+    'SELECT * FROM "ContactKnowledge" WHERE "remoteJid" = $1',
+    [remoteJid]
   );
   if (ck.rows.length === 0) return null;
 
@@ -312,8 +343,8 @@ async function saveExtraction(db, instanceId, remoteJid, pushName, extraction) {
   const upsert = await db.query(`
     INSERT INTO "ContactKnowledge" (id, "remoteJid", "instanceId", "pushName", summary, "updatedAt")
     VALUES (gen_random_uuid()::text, $1, $2, $3, $4, NOW())
-    ON CONFLICT ("remoteJid", "instanceId")
-    DO UPDATE SET summary = $4, "pushName" = COALESCE($3, "ContactKnowledge"."pushName"), "updatedAt" = NOW()
+    ON CONFLICT ("remoteJid")
+    DO UPDATE SET summary = $4, "instanceId" = $2, "pushName" = COALESCE($3, "ContactKnowledge"."pushName"), "updatedAt" = NOW()
     RETURNING id
   `, [remoteJid, instanceId, pushName || null, extraction.summary || '']);
 
@@ -436,8 +467,8 @@ async function extractFromMessages(instanceId, instanceName, remoteJid, messageC
 async function getContactKnowledge(instanceId, remoteJid) {
   const db = getPool();
   const ck = await db.query(
-    'SELECT * FROM "ContactKnowledge" WHERE "remoteJid" = $1 AND "instanceId" = $2',
-    [remoteJid, instanceId]
+    'SELECT * FROM "ContactKnowledge" WHERE "remoteJid" = $1',
+    [remoteJid]
   );
   if (ck.rows.length === 0) return null;
 
@@ -473,17 +504,16 @@ async function listContacts(instanceId) {
       (SELECT COUNT(*) FROM "KnowledgeEntity" WHERE "contactKnowledgeId" = ck.id) as "entityCount",
       (SELECT COUNT(*) FROM "KnowledgeRelationship" WHERE "contactKnowledgeId" = ck.id) as "relationshipCount"
     FROM "ContactKnowledge" ck
-    WHERE ck."instanceId" = $1
     ORDER BY ck."updatedAt" DESC
-  `, [instanceId]);
+  `);
   return result.rows;
 }
 
 async function deleteContactKnowledge(instanceId, remoteJid) {
   const db = getPool();
   const result = await db.query(
-    'DELETE FROM "ContactKnowledge" WHERE "remoteJid" = $1 AND "instanceId" = $2 RETURNING id',
-    [remoteJid, instanceId]
+    'DELETE FROM "ContactKnowledge" WHERE "remoteJid" = $1 RETURNING id',
+    [remoteJid]
   );
   return { deleted: result.rowCount > 0 };
 }
@@ -610,12 +640,12 @@ async function getContactTasks(instanceId, remoteJid) {
   const result = await db.query(`
     SELECT ct.* FROM "ContactTask" ct
     JOIN "ContactKnowledge" ck ON ct."contactKnowledgeId" = ck.id
-    WHERE ck."remoteJid" = $1 AND ck."instanceId" = $2
+    WHERE ck."remoteJid" = $1
       AND ct.status NOT IN ('recusada', 'concluida')
     ORDER BY
       CASE ct.priority WHEN 'alta' THEN 0 WHEN 'media' THEN 1 WHEN 'baixa' THEN 2 ELSE 3 END,
       ct."createdAt" DESC
-  `, [remoteJid, instanceId]);
+  `, [remoteJid]);
   return result.rows;
 }
 
@@ -656,7 +686,7 @@ async function saveContactName(instanceId, remoteJid, savedName) {
   await db.query(`
     INSERT INTO "ContactKnowledge" ("remoteJid", "instanceId", "savedName", "updatedAt")
     VALUES ($1, $2, $3, NOW())
-    ON CONFLICT ("remoteJid", "instanceId")
+    ON CONFLICT ("remoteJid")
     DO UPDATE SET "savedName" = $3, "updatedAt" = NOW()
   `, [remoteJid, instanceId, savedName]);
   return { ok: true, savedName };
@@ -665,8 +695,7 @@ async function saveContactName(instanceId, remoteJid, savedName) {
 async function getSavedContacts(instanceId) {
   const db = getPool();
   const result = await db.query(
-    'SELECT "remoteJid", "savedName", "pushName" FROM "ContactKnowledge" WHERE "instanceId" = $1 AND "savedName" IS NOT NULL AND "savedName" != \'\'',
-    [instanceId]
+    'SELECT "remoteJid", "savedName", "pushName" FROM "ContactKnowledge" WHERE "savedName" IS NOT NULL AND "savedName" != \'\''
   );
   return result.rows;
 }
@@ -743,8 +772,8 @@ async function handleRequest(req, res, urlPath, fullApiPath) {
       if (!query.remoteJid || !query.category) return json(400, { error: 'remoteJid and category required' });
       const db = getPool();
       const ck = await db.query(
-        'SELECT id FROM "ContactKnowledge" WHERE "remoteJid" = $1 AND "instanceId" = $2',
-        [query.remoteJid, instanceId]
+        'SELECT id FROM "ContactKnowledge" WHERE "remoteJid" = $1',
+        [query.remoteJid]
       );
       if (ck.rows.length === 0) return json(200, []);
       const entities = await db.query(
