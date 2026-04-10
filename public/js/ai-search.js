@@ -4,6 +4,12 @@
 
 let aiSearching = false;
 
+function aiSuggestClick(btn) {
+  const input = document.getElementById('aiSearchInput');
+  input.value = btn.textContent;
+  aiSearch();
+}
+
 function formatTsForAi(ts) {
   if (!ts) return '';
   const d = new Date(ts * 1000);
@@ -35,6 +41,8 @@ async function aiSearch() {
   summaryEl.style.display = 'none';
   status.style.display = 'flex';
   status.innerHTML = '<div class="ai-spinner"></div> Buscando conversas recentes...';
+  const suggestionsEl = document.getElementById('aiSuggestions');
+  if (suggestionsEl) suggestionsEl.style.display = 'none';
 
   try {
     // 1. Fetch recent chats
