@@ -1297,6 +1297,18 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 .gp-secondary-btn:hover { background: var(--panel-alt); color: var(--text); }
 
 /* Pinned message banner */
+/* Reconnecting banner */
+.reconnecting-banner {
+  display: none; align-items: center; justify-content: center; gap: 8px;
+  padding: 6px 16px; background: #fef3c7; border-bottom: 1px solid #fde68a;
+  font-size: 12px; font-weight: 600; color: #92400e; flex-shrink: 0;
+  animation: reconnectPulse 2s ease-in-out infinite;
+}
+@keyframes reconnectPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
 .pinned-banner {
   display: flex; align-items: center; gap: 8px; padding: 8px 16px;
   background: #f0f4e8; border-bottom: 1px solid #d4dcc4;

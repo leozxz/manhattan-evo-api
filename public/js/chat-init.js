@@ -110,7 +110,14 @@ function startSSE() {
   const evtSource = new EventSource('/events');
 
   evtSource.addEventListener('connected', () => {
+    const wasDisconnected = !sseConnected;
     sseConnected = true;
+    // SSE back — stop polling fallback, reset backoff
+    if (wasDisconnected && selectedGroup) {
+      stopMsgPolling();
+      hideReconnecting();
+      fetchAndRenderMessages();
+    }
   });
 
   // Group participant events
@@ -200,10 +207,12 @@ function startSSE() {
         let chat = findChatByJid(remoteJid, mainPhone);
         if (!chat && remoteJidAlt) chat = findChatByJid(remoteJidAlt, mainPhone);
 
-        if (chat && (chat.id === selectedGroup || chat.messageJid === selectedGroup)) return;
-        if (!chat && selectedGroupData?.phone) {
-          const selPk = phoneKey(selectedGroupData.phone);
-          if (allPhones.some(ph => phoneKey(ph) === selPk)) return;
+        // If message is for the active chat, refresh messages directly via SSE
+        const isActiveChat = (chat && (chat.id === selectedGroup || chat.messageJid === selectedGroup))
+          || (!chat && selectedGroupData?.phone && allPhones.some(ph => phoneKey(ph) === phoneKey(selectedGroupData.phone)));
+        if (isActiveChat) {
+          fetchAndRenderMessages();
+          return;
         }
 
         if (!chat) {
@@ -368,6 +377,11 @@ function startSSE() {
 
   evtSource.onerror = () => {
     sseConnected = false;
+    // Start polling as fallback while SSE is down
+    if (selectedGroup && !pollTimeout) {
+      showReconnecting('Reconectando...');
+      schedulePoll();
+    }
     if (evtSource.readyState === EventSource.CLOSED) {
       setTimeout(startSSE, 5000);
     }

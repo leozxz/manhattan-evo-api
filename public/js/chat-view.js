@@ -469,17 +469,76 @@ async function fetchAndRenderMessages() {
 }
 
 // =====================
-// MESSAGE POLLING
+// MESSAGE POLLING (fallback for SSE)
 // =====================
+const POLL_BASE = 3000;
+const POLL_MAX = 30000;
+const POLL_MAX_FAILURES = 10;
+let pollDelay = POLL_BASE;
+let pollFailures = 0;
+let pollTimeout = null;
+
 function startMsgPolling() {
   stopMsgPolling();
   if (!selectedGroup) return;
-  document.getElementById('pollingIndicator')?.style.setProperty('display', 'flex');
-  msgPollInterval = setInterval(fetchAndRenderMessages, 3000);
+
+  // If SSE is connected, only do a single initial fetch — no continuous polling
+  if (sseConnected) {
+    fetchAndRenderMessages();
+    return;
+  }
+
+  pollDelay = POLL_BASE;
+  pollFailures = 0;
+  schedulePoll();
+}
+
+function schedulePoll() {
+  if (pollTimeout) clearTimeout(pollTimeout);
+  if (!selectedGroup) return;
+  pollTimeout = setTimeout(async () => {
+    try {
+      await fetchAndRenderMessages();
+      // Success: reset backoff
+      if (pollDelay > POLL_BASE) {
+        pollDelay = POLL_BASE;
+        hideReconnecting();
+      }
+      pollFailures = 0;
+    } catch {
+      pollFailures++;
+      pollDelay = Math.min(pollDelay * 2, POLL_MAX);
+      if (pollFailures >= POLL_MAX_FAILURES) {
+        showReconnecting('Conexao perdida. Recarregue a pagina.');
+        return; // stop polling
+      }
+      showReconnecting('Reconectando... (' + Math.round(pollDelay / 1000) + 's)');
+    }
+    // Schedule next poll (only if SSE still down)
+    if (!sseConnected && selectedGroup) schedulePoll();
+  }, pollDelay);
 }
 
 function stopMsgPolling() {
+  if (pollTimeout) { clearTimeout(pollTimeout); pollTimeout = null; }
   if (msgPollInterval) { clearInterval(msgPollInterval); msgPollInterval = null; }
   lastMsgCount = 0;
-  document.getElementById('pollingIndicator')?.style.setProperty('display', 'none');
+}
+
+function showReconnecting(text) {
+  let el = document.getElementById('reconnectingBanner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'reconnectingBanner';
+    el.className = 'reconnecting-banner';
+    const header = document.querySelector('.chat-header');
+    if (header) header.parentNode.insertBefore(el, header.nextSibling);
+  }
+  el.textContent = text;
+  el.style.display = 'flex';
+}
+
+function hideReconnecting() {
+  const el = document.getElementById('reconnectingBanner');
+  if (el) el.style.display = 'none';
 }
