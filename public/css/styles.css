@@ -715,19 +715,19 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 
 /* Hero */
 .ai-hero {
-  text-align: center; padding: 40px 24px 32px;
+  text-align: center; padding: 44px 24px 32px;
   position: relative; overflow: hidden;
 }
 .ai-hero-glow {
   position: absolute; top: -40px; left: 50%; transform: translateX(-50%);
-  width: 260px; height: 260px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(0,209,102,0.12) 0%, transparent 70%);
+  width: 300px; height: 300px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,209,102,0.10) 0%, transparent 70%);
   pointer-events: none;
   animation: aiGlowPulse 4s ease-in-out infinite;
 }
 @keyframes aiGlowPulse {
-  0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
-  50% { opacity: 1; transform: translateX(-50%) scale(1.15); }
+  0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.2); }
 }
 .ai-hero-icon {
   width: 56px; height: 56px; border-radius: 16px;
@@ -735,6 +735,11 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
   display: inline-flex; align-items: center; justify-content: center;
   margin-bottom: 16px; position: relative;
   box-shadow: 0 4px 16px rgba(16,185,129,0.3);
+  animation: aiIconFloat 3s ease-in-out infinite;
+}
+@keyframes aiIconFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
 }
 .ai-hero h2 {
   font-size: 22px; font-weight: 800; color: var(--text);
@@ -744,12 +749,31 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
   font-size: 14px; color: var(--text-muted); position: relative;
 }
 
+/* Floating particles in hero */
+.ai-hero::after {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    radial-gradient(2px 2px at 15% 30%, rgba(16,185,129,0.3) 50%, transparent 50%),
+    radial-gradient(2px 2px at 80% 20%, rgba(99,102,241,0.25) 50%, transparent 50%),
+    radial-gradient(1.5px 1.5px at 40% 70%, rgba(16,185,129,0.2) 50%, transparent 50%),
+    radial-gradient(2px 2px at 70% 65%, rgba(59,130,246,0.2) 50%, transparent 50%),
+    radial-gradient(1.5px 1.5px at 25% 80%, rgba(139,92,246,0.2) 50%, transparent 50%),
+    radial-gradient(2px 2px at 90% 50%, rgba(16,185,129,0.2) 50%, transparent 50%);
+  animation: aiParticlesDrift 8s ease-in-out infinite alternate;
+}
+@keyframes aiParticlesDrift {
+  0% { transform: translateY(0) translateX(0); }
+  100% { transform: translateY(-8px) translateX(4px); }
+}
+
 /* Search card */
 .ai-search-card {
   background: #fff; border: 1px solid #e8e8e8;
   border-radius: 16px; padding: 6px; margin: 0 0 24px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04);
   transition: box-shadow 0.3s;
+  position: relative; overflow: hidden;
 }
 .ai-search-card:focus-within {
   box-shadow: 0 1px 4px rgba(0,0,0,0.04), 0 8px 32px rgba(0,0,0,0.08), 0 0 0 2px rgba(0,209,102,0.12);
@@ -874,6 +898,33 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 .ai-result-reason::before {
   content: ''; width: 4px; height: 4px; border-radius: 50%;
   background: #8b5cf6; flex-shrink: 0;
+}
+
+/* Entry animations */
+.ai-result-enter {
+  animation: aiCardSlideIn 0.4s ease both;
+}
+@keyframes aiCardSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.ai-summary-enter {
+  animation: aiSummaryIn 0.5s ease both;
+}
+@keyframes aiSummaryIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Searching shimmer on search card */
+.ai-search-card.ai-searching::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: aiShimmer 1.5s ease-in-out infinite;
+}
+@keyframes aiShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 .empty-chat {

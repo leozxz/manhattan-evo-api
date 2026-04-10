@@ -37,6 +37,10 @@ async function aiSearch() {
   const resultsEl = document.getElementById('aiResults');
 
   btn.disabled = true;
+  document.querySelector('.ai-search-card')?.classList.add('ai-searching');
+  // Keep min-height to prevent layout jump
+  const currentH = resultsEl.offsetHeight + (summaryEl.offsetHeight || 0);
+  if (currentH > 100) resultsEl.style.minHeight = currentH + 'px';
   resultsEl.innerHTML = '';
   summaryEl.style.display = 'none';
   status.style.display = 'flex';
@@ -149,6 +153,9 @@ async function aiSearch() {
     if (aiSummaryText) {
       summaryEl.textContent = aiSummaryText;
       summaryEl.style.display = 'block';
+      summaryEl.classList.remove('ai-summary-enter');
+      void summaryEl.offsetWidth; // force reflow
+      summaryEl.classList.add('ai-summary-enter');
     }
 
     if (!matches || matches.length === 0) {
@@ -158,7 +165,9 @@ async function aiSearch() {
 
     status.style.display = 'none';
     resultsEl.innerHTML = '';
+    resultsEl.style.minHeight = '';
 
+    let cardIdx = 0;
     matches.forEach(match => {
       const idx = parseInt(match.id, 10);
       const origMsg = indexed[idx];
@@ -183,6 +192,9 @@ async function aiSearch() {
       `;
 
       card.onclick = () => openChatFromAi(origMsg.contactJid);
+      card.style.animationDelay = (cardIdx * 0.08) + 's';
+      card.classList.add('ai-result-enter');
+      cardIdx++;
       resultsEl.appendChild(card);
     });
 
@@ -192,6 +204,7 @@ async function aiSearch() {
 
   aiSearching = false;
   btn.disabled = false;
+  document.querySelector('.ai-search-card')?.classList.remove('ai-searching');
 }
 
 function openChatFromAi(jid) {
