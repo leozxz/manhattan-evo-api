@@ -16,7 +16,7 @@ async function togglePanel() {
 
 function switchPanelTab(tab) {
   currentPanelTab = tab;
-  document.querySelectorAll('.panel-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.gp-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   if (tab === 'participants') loadParticipants();
   else loadGroupInfo();
 }
@@ -454,22 +454,28 @@ async function loadGroupInfo() {
   body.innerHTML = '';
 
   const descSection = document.createElement('div');
-  descSection.className = 'panel-info-section';
+  descSection.className = 'gp-info-section';
   descSection.innerHTML = `
-    <div class="panel-info-label">Descricao do grupo</div>
-    <textarea id="groupDescInput" class="panel-info-textarea" placeholder="Sem descricao">${escapeHtml(desc)}</textarea>
-    <button class="btn btn-primary btn-sm panel-info-save" onclick="saveGroupDescription()">Salvar descricao</button>
+    <div class="gp-info-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      <span>Descricao</span>
+    </div>
+    <textarea id="groupDescInput" class="gp-textarea" placeholder="Sem descricao">${escapeHtml(desc)}</textarea>
+    <button class="gp-save-btn" onclick="saveGroupDescription()">Salvar</button>
   `;
   body.appendChild(descSection);
 
   const pinSection = document.createElement('div');
-  pinSection.className = 'panel-info-section';
+  pinSection.className = 'gp-info-section';
   pinSection.innerHTML = `
-    <div class="panel-info-label">Mensagem fixada</div>
-    <textarea id="pinnedMsgInput" class="panel-info-textarea" placeholder="Nenhuma mensagem fixada">${escapeHtml(pinned)}</textarea>
-    <div class="panel-info-actions">
-      <button class="btn btn-primary btn-sm" onclick="savePinnedMessage()">Fixar</button>
-      <button class="btn btn-secondary btn-sm" onclick="clearPinnedMessage()">Remover</button>
+    <div class="gp-info-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M12 2L12 22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <span>Mensagem fixada</span>
+    </div>
+    <textarea id="pinnedMsgInput" class="gp-textarea" placeholder="Nenhuma mensagem fixada">${escapeHtml(pinned)}</textarea>
+    <div class="gp-info-btns">
+      <button class="gp-save-btn" onclick="savePinnedMessage()">Fixar</button>
+      <button class="gp-secondary-btn" onclick="clearPinnedMessage()">Remover</button>
     </div>
   `;
   body.appendChild(pinSection);
@@ -557,28 +563,42 @@ async function loadParticipants() {
 
   body.innerHTML = '';
 
-  const header = document.createElement('div');
-  header.className = 'panel-fixed-header';
-  header.innerHTML = `
-    <div class="panel-header-top">
-      <span class="panel-member-count">${participants.length} membro${participants.length !== 1 ? 's' : ''}</span>
-      <div class="panel-add-row">
-        <input type="text" id="panelAddInput" placeholder="5511999999999" onkeydown="if(event.key==='Enter'){event.preventDefault();addMember()}">
-        <button class="btn btn-primary btn-sm" onclick="addMember()">Add</button>
-      </div>
-    </div>
-    <input type="text" id="panelSearchInput" class="panel-search-input" placeholder="Buscar participante..." oninput="filterParticipants()">
+  // Count badge
+  const countBadge = document.createElement('div');
+  countBadge.className = 'gp-count';
+  countBadge.innerHTML = `
+    <span>${participants.length} membro${participants.length !== 1 ? 's' : ''}</span>
   `;
-  body.appendChild(header);
+  body.appendChild(countBadge);
+
+  // Search
+  const search = document.createElement('div');
+  search.className = 'gp-search-wrap';
+  search.innerHTML = `
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="panelSearchInput" placeholder="Buscar..." oninput="filterParticipants()">
+  `;
+  body.appendChild(search);
+
+  // Add member row
+  const addRow = document.createElement('div');
+  addRow.className = 'gp-add-row';
+  addRow.innerHTML = `
+    <input type="text" id="panelAddInput" placeholder="5511999999999" onkeydown="if(event.key==='Enter'){event.preventDefault();addMember()}">
+    <button class="gp-add-btn" onclick="addMember()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+    </button>
+  `;
+  body.appendChild(addRow);
 
   if (participants.length === 0) {
-    body.innerHTML += '<div style="padding:20px;text-align:center;color:#667781;font-size:13px">Nao foi possivel carregar participantes. Tente novamente.</div>';
+    body.innerHTML += '<div style="padding:20px;text-align:center;color:#667781;font-size:13px">Nao foi possivel carregar participantes.</div>';
     return;
   }
 
   const list = document.createElement('div');
   list.id = 'panelMemberList';
-  list.className = 'panel-member-list';
+  list.className = 'gp-members';
 
   const sortedP = [...participants].sort((a, b) => {
     const order = { superadmin: 0, admin: 1 };
@@ -595,26 +615,31 @@ async function loadParticipants() {
 
     const isAdmin = p.admin === 'admin' || p.admin === 'superadmin';
     const isSuperAdmin = p.admin === 'superadmin';
+    const initials = (displayName || phoneRaw).charAt(0).toUpperCase();
+    const avatarColor = isSuperAdmin ? '#6366f1' : isAdmin ? '#10b981' : '#94a3b8';
 
     const el = document.createElement('div');
-    el.className = 'panel-member';
+    el.className = 'gp-member';
     el.dataset.search = (displayName + ' ' + phoneFormatted + ' ' + phoneRaw).toLowerCase();
     el.innerHTML = `
-      <div class="panel-member-avatar" style="background:${isSuperAdmin ? '#128c7e' : isAdmin ? '#25d366' : '#dfe5e7'}">
-        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+      <div class="gp-member-avatar" style="background:${avatarColor}">${initials}</div>
+      <div class="gp-member-info">
+        <div class="gp-member-name">
+          ${escapeHtml(displayName || phoneFormatted)}
+          ${isSuperAdmin ? '<span class="gp-badge gp-badge-owner">Criador</span>' : isAdmin ? '<span class="gp-badge gp-badge-admin">Admin</span>' : ''}
+        </div>
+        <div class="gp-member-phone">${displayName ? escapeHtml(phoneFormatted) : 'Membro'}</div>
       </div>
-      <div class="panel-member-info">
-        <div class="panel-member-name">${escapeHtml(displayName || phoneFormatted)}${isSuperAdmin ? ' <span class="panel-badge badge-owner">Criador</span>' : isAdmin ? ' <span class="panel-badge badge-admin">Admin</span>' : ''}</div>
-        <div class="panel-member-role">${displayName ? escapeHtml(phoneFormatted) : 'Membro'}</div>
+      <div class="gp-member-actions">
+        <button class="gp-member-btn gp-btn-graph" title="Ver perfil" onclick="event.stopPropagation(); openParticipantGraph('${escapeHtml(jid)}', '${escapeHtml(displayName || phoneFormatted)}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2z"/></svg>
+        </button>
+        ${!isSuperAdmin ? '<button class="gp-member-btn gp-btn-remove" onclick="event.stopPropagation(); removeMember(\'' + escapeHtml(phoneRaw) + '\')" title="Remover"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' : ''}
       </div>
-      ${!isSuperAdmin ? '<button class="panel-member-remove" onclick="removeMember(\'' + escapeHtml(phoneRaw) + '\')" title="Remover">&times;</button>' : ''}
-      <button class="panel-member-graph" title="Ver perfil" onclick="event.stopPropagation(); openParticipantGraph('${escapeHtml(jid)}', '${escapeHtml(displayName || phoneFormatted)}')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2z"/></svg>
-      </button>
     `;
     el.style.cursor = 'pointer';
     el.onclick = (e) => {
-      if (e.target.closest('.panel-member-remove') || e.target.closest('.panel-member-graph')) return;
+      if (e.target.closest('.gp-member-btn')) return;
       openParticipantGraph(jid, displayName || phoneFormatted);
     };
     list.appendChild(el);
@@ -624,7 +649,7 @@ async function loadParticipants() {
 
 function filterParticipants() {
   const query = (document.getElementById('panelSearchInput')?.value || '').toLowerCase().trim();
-  const members = document.querySelectorAll('#panelMemberList .panel-member');
+  const members = document.querySelectorAll('#panelMemberList .gp-member');
   members.forEach(el => {
     el.style.display = !query || el.dataset.search.includes(query) ? '' : 'none';
   });

@@ -935,7 +935,7 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
   padding: 0 16px; border-bottom: 1px solid var(--border-light);
   display: flex; align-items: center; flex-shrink: 0; gap: 8px; height: 56px;
 }
-.group-panel-header h3 { font-size: 14px; font-weight: 700; }
+.group-panel-header span { font-size: 13px; font-weight: 700; }
 .group-panel-body { flex: 1; overflow-y: auto; padding: 12px 0; }
 
 /* Knowledge panel */
@@ -1023,32 +1023,139 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 .graph-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
 /* Panel tabs */
-.panel-tabs { display: flex; gap: 0; }
-.panel-tab {
-  background: none; border: none; cursor: pointer; padding: 6px 14px;
-  font-size: 12.5px; font-weight: 600; color: var(--text-muted);
-  border-bottom: 2px solid transparent; transition: all 0.2s;
+/* ── Group panel tabs ── */
+.gp-header {
+  display: flex; align-items: center; padding: 0; border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
 }
-.panel-tab:hover { color: var(--text); }
-.panel-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.gp-tabs { display: flex; flex: 1; }
+.gp-tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  background: none; border: none; cursor: pointer;
+  padding: 14px 0; font-size: 12px; font-weight: 600;
+  color: var(--text-muted); border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.gp-tab:hover { color: var(--text); background: var(--panel-alt); }
+.gp-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.gp-tab svg { flex-shrink: 0; }
+.gp-close {
+  background: none; border: none; cursor: pointer; padding: 8px 14px;
+  font-size: 18px; color: var(--text-muted); transition: color 0.15s;
+}
+.gp-close:hover { color: var(--text); }
 
-/* Info tab sections */
-.panel-info-section {
+/* ── Member count ── */
+.gp-count {
+  padding: 14px 16px 8px; font-size: 12px; font-weight: 700;
+  color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+/* ── Search ── */
+.gp-search-wrap {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 12px 8px; padding: 8px 12px;
+  background: var(--panel-alt); border-radius: 10px;
+  border: 1px solid transparent; transition: border-color 0.2s;
+}
+.gp-search-wrap:focus-within { border-color: var(--accent); }
+.gp-search-wrap input {
+  border: none; background: none; outline: none; flex: 1; min-width: 0;
+  font-size: 12px; color: var(--text); padding: 0;
+}
+.gp-search-wrap input::placeholder { color: #b0b5bd; }
+
+/* ── Add member ── */
+.gp-add-row {
+  display: flex; gap: 6px; padding: 0 12px 12px;
+}
+.gp-add-row input {
+  flex: 1; padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: 10px; font-size: 12px; outline: none;
+  transition: border-color 0.2s;
+}
+.gp-add-row input:focus { border-color: var(--accent); }
+.gp-add-btn {
+  width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel-alt); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-muted); transition: all 0.2s; flex-shrink: 0;
+}
+.gp-add-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── Member list ── */
+.gp-members { padding: 0 4px; }
+.gp-member {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 10px; margin: 2px 0;
+  transition: background 0.15s; cursor: pointer;
+}
+.gp-member:hover { background: var(--panel-alt); }
+
+.gp-member-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0;
+  letter-spacing: -0.3px;
+}
+.gp-member-info { flex: 1; min-width: 0; }
+.gp-member-name {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: flex; align-items: center; gap: 6px;
+}
+.gp-member-phone { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+.gp-badge {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  padding: 2px 7px; border-radius: 4px; flex-shrink: 0;
+}
+.gp-badge-owner { background: #ede9fe; color: #6366f1; }
+.gp-badge-admin { background: #d1fae5; color: #059669; }
+
+.gp-member-actions {
+  display: flex; gap: 2px; opacity: 0; transition: opacity 0.2s;
+}
+.gp-member:hover .gp-member-actions { opacity: 1; }
+.gp-member-btn {
+  width: 28px; height: 28px; border: none; border-radius: 8px;
+  background: none; cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  color: var(--text-muted); transition: all 0.15s;
+}
+.gp-btn-graph:hover { background: rgba(139,92,246,0.1); color: #8b5cf6; }
+.gp-btn-remove:hover { background: #fee2e2; color: #ef4444; }
+
+/* ── Info tab ── */
+.gp-info-section {
   padding: 16px; border-bottom: 1px solid var(--border-light);
 }
-.panel-info-label {
-  font-size: 11px; font-weight: 700; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+.gp-info-icon {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.4px;
+  margin-bottom: 10px;
 }
-.panel-info-textarea {
+.gp-textarea {
   width: 100%; min-height: 70px; padding: 10px 12px; font-size: 13px;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  border: 1px solid var(--border); border-radius: 10px;
   background: var(--panel-alt); resize: vertical; font-family: inherit;
-  outline: none; transition: border-color 0.2s; line-height: 1.4;
+  outline: none; transition: border-color 0.2s; line-height: 1.5;
+  color: var(--text);
 }
-.panel-info-textarea:focus { border-color: var(--accent); }
-.panel-info-save { margin-top: 8px; }
-.panel-info-actions { display: flex; gap: 6px; margin-top: 8px; }
+.gp-textarea:focus { border-color: var(--accent); background: #fff; }
+.gp-save-btn {
+  margin-top: 8px; padding: 7px 16px; border: none; border-radius: 8px;
+  background: var(--accent); color: #fff; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background 0.15s;
+}
+.gp-save-btn:hover { background: var(--accent-hover); }
+.gp-info-btns { display: flex; gap: 6px; margin-top: 8px; }
+.gp-secondary-btn {
+  padding: 7px 16px; border: 1px solid var(--border); border-radius: 8px;
+  background: none; color: var(--text-muted); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.gp-secondary-btn:hover { background: var(--panel-alt); color: var(--text); }
 
 /* Pinned message banner */
 .pinned-banner {

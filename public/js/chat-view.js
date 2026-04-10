@@ -119,12 +119,18 @@ async function selectGroup(chat, el) {
         </div>
       </div>
       ${isGroup ? `<div class="group-panel" id="groupPanel" style="display:none">
-        <div class="group-panel-header">
-          <div class="panel-tabs">
-            <button class="panel-tab active" data-tab="participants" onclick="switchPanelTab('participants')">Participantes</button>
-            <button class="panel-tab" data-tab="info" onclick="switchPanelTab('info')">Info</button>
+        <div class="gp-header">
+          <div class="gp-tabs">
+            <button class="gp-tab active" data-tab="participants" onclick="switchPanelTab('participants')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Membros
+            </button>
+            <button class="gp-tab" data-tab="info" onclick="switchPanelTab('info')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Info
+            </button>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="togglePanel()">&times;</button>
+          <button class="gp-close" onclick="togglePanel()">&times;</button>
         </div>
         <div class="group-panel-body" id="panelBody">
           <div class="spinner" style="margin-top:40px"></div>
