@@ -167,32 +167,57 @@ async function aiSearch() {
     resultsEl.innerHTML = '';
     resultsEl.style.minHeight = '';
 
-    let cardIdx = 0;
+    // Group matches by contact
+    const grouped = {};
     matches.forEach(match => {
       const idx = parseInt(match.id, 10);
       const origMsg = indexed[idx];
       if (!origMsg) return;
+      const key = origMsg.contactJid || origMsg.contactName;
+      if (!grouped[key]) {
+        grouped[key] = { contactName: origMsg.contactName, contactJid: origMsg.contactJid, messages: [] };
+      }
+      grouped[key].messages.push({ ...origMsg, reason: match.reason });
+    });
 
-      const date = new Date(origMsg.timestamp * 1000);
-      const timeStr = date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    let cardIdx = 0;
+    Object.values(grouped).forEach(group => {
+      const initials = (group.contactName || '?').charAt(0).toUpperCase();
 
       const card = document.createElement('div');
       card.className = 'ai-result-card';
+
+      let msgsHtml = group.messages.map(m => {
+        const date = new Date(m.timestamp * 1000);
+        const timeStr = date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        return `
+          <div class="ai-msg-item">
+            <div class="ai-msg-bubble">
+              <span class="ai-msg-text">${escapeHtml(m.text)}</span>
+              <span class="ai-msg-time">${timeStr}</span>
+            </div>
+            ${m.reason ? '<div class="ai-result-reason">' + escapeHtml(m.reason) + '</div>' : ''}
+          </div>
+        `;
+      }).join('');
+
       card.innerHTML = `
         <div class="ai-result-header">
-          <div class="ai-result-avatar">${(origMsg.contactName || '?').charAt(0).toUpperCase()}</div>
+          <div class="ai-result-avatar">${initials}</div>
           <div class="ai-result-info">
-            <span class="ai-result-name">${escapeHtml(origMsg.contactName)}</span>
-            <span class="ai-result-time">${timeStr}</span>
+            <span class="ai-result-name">${escapeHtml(group.contactName)}</span>
+            <span class="ai-result-count">${group.messages.length} mensage${group.messages.length !== 1 ? 'ns' : 'm'}</span>
           </div>
           <div class="ai-result-open">Abrir conversa &rarr;</div>
         </div>
-        <div class="ai-result-text">${escapeHtml(origMsg.text)}</div>
-        ${match.reason ? '<div class="ai-result-reason">' + escapeHtml(match.reason) + '</div>' : ''}
+        <div class="ai-msg-list">${msgsHtml}</div>
       `;
 
-      card.onclick = () => openChatFromAi(origMsg.contactJid);
-      card.style.animationDelay = (cardIdx * 0.08) + 's';
+      card.onclick = (e) => {
+        if (e.target.closest('.ai-msg-item')) return openChatFromAi(group.contactJid);
+        openChatFromAi(group.contactJid);
+      };
+      card.style.animationDelay = (cardIdx * 0.1) + 's';
       card.classList.add('ai-result-enter');
       cardIdx++;
       resultsEl.appendChild(card);
