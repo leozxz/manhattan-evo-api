@@ -107,9 +107,9 @@ http.createServer((req, res) => {
     return handleLogout(req, res, SECURITY_HEADERS);
   }
 
-  // Webhook receiver (no auth — Evolution API calls this)
+  // Webhook receiver (HMAC-authenticated — Evolution API calls this)
   if (req.method === 'POST' && urlPath === '/webhook/internal') {
-    return handleWebhook(req, res);
+    return handleWebhook(req, res, SECURITY_HEADERS);
   }
 
   // Auth check (async for Redis sessions)
