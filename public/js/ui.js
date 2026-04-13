@@ -80,6 +80,7 @@ function ensureConnected() {
 // USER ROLE & PERMISSIONS
 // =====================
 let currentUserRole = 'user';
+let currentUsername = '';
 const ADMIN_PAGES = ['connect', 'group', 'dashboard'];
 
 async function loadCurrentUser() {
@@ -88,6 +89,7 @@ async function loadCurrentUser() {
     if (res.ok) {
       const data = await res.json();
       currentUserRole = data.role || 'user';
+      currentUsername = data.username || '';
     }
   } catch {}
   applyPermissions();
@@ -96,7 +98,7 @@ async function loadCurrentUser() {
 function applyPermissions() {
   const isAdmin = currentUserRole === 'admin';
   const btns = document.querySelectorAll('.sidebar-btn');
-  const pages = ['connect', 'group', 'chat', 'dashboard'];
+  const pages = ['connect', 'group', 'chat', 'ai', 'dashboard'];
 
   pages.forEach((page, i) => {
     const btn = btns[i];
@@ -118,21 +120,22 @@ function applyPermissions() {
     }
   });
 
-  // Show/hide manage users in menu
-  const manageBtn = document.getElementById('menuManageUsers');
-  if (manageBtn) manageBtn.style.display = isAdmin ? '' : 'none';
 }
 
 // User menu toggle
-function toggleUserMenu() {
-  const menu = document.getElementById('sidebarUserMenu');
-  menu.classList.toggle('open');
+function showAccountModal() {
+  const overlay = document.getElementById('accountModalOverlay');
+  const nameEl = document.getElementById('accountName');
+  const roleEl = document.getElementById('accountRole');
+  const manageBtn = document.getElementById('accountManageUsersBtn');
+  if (nameEl) nameEl.textContent = currentUsername || 'Usuario';
+  if (roleEl) roleEl.textContent = currentUserRole === 'admin' ? 'Administrador' : 'Usuario';
+  if (manageBtn) manageBtn.style.display = currentUserRole === 'admin' ? '' : 'none';
+  overlay.style.display = '';
 }
-document.addEventListener('mousedown', function(e) {
-  const wrap = document.getElementById('sidebarUserWrap');
-  const menu = document.getElementById('sidebarUserMenu');
-  if (wrap && menu && !wrap.contains(e.target)) menu.classList.remove('open');
-});
+function closeAccountModal() {
+  document.getElementById('accountModalOverlay').style.display = 'none';
+}
 
 // =====================
 // USER MANAGER (admin)
@@ -272,10 +275,10 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  const idx = ['connect','group','chat','dashboard'].indexOf(name);
-  document.querySelectorAll('.sidebar-btn')[idx].classList.add('active');
+  const idx = ['connect','group','chat','ai','dashboard'].indexOf(name);
+  if (idx >= 0) document.querySelectorAll('.sidebar-btn')[idx].classList.add('active');
 
-  const titles = { connect: 'Conexoes', group: 'Criar Grupo', chat: 'Mensagens', dashboard: 'Dashboard' };
+  const titles = { connect: 'Conexoes', group: 'Criar Grupo', chat: 'Mensagens', ai: 'Busca IA', dashboard: 'Dashboard' };
   document.getElementById('pageTitle').textContent = titles[name];
 
   // Chat page uses fullscreen (hide header, expand content)

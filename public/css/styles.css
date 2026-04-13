@@ -114,21 +114,6 @@ body {
 .sidebar-logo svg { width: 18px; height: 18px; fill: #fff; }
 
 .sidebar-user-wrap { position: relative; margin-bottom: 8px; width: 100%; }
-.sidebar-user-menu {
-  display: none; position: absolute; left: 50px; bottom: 0;
-  background: var(--sidebar-bg); border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-  min-width: 130px; z-index: 50; padding: 4px 0;
-}
-.sidebar:hover .sidebar-user-menu { left: 170px; }
-.sidebar-user-menu.open { display: block; }
-.sidebar-user-menu button {
-  width: 100%; padding: 10px 16px; border: none; background: none;
-  color: #d1d5db; font-size: 13px; cursor: pointer;
-  display: flex; align-items: center; gap: 8px; transition: background 0.15s;
-}
-.sidebar-user-menu button:hover { background: var(--sidebar-hover); }
-.sidebar-user-menu button svg { width: 16px; height: 16px; fill: #9ca3af; }
 
 .sidebar-btn.locked { opacity: 0.35; cursor: not-allowed; }
 .sidebar-btn.locked:hover { background: transparent; }
@@ -157,6 +142,16 @@ body {
 }
 .modal-close:hover { color: #fff; }
 .modal-body { padding: 16px 20px; max-height: 400px; overflow-y: auto; }
+
+.account-modal-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 14px; border: none; background: var(--panel-alt);
+  border-radius: var(--radius-sm); cursor: pointer; font-size: 13px;
+  color: var(--text); transition: background 0.15s; font-family: var(--font);
+}
+.account-modal-btn:hover { background: var(--border-light); }
+.account-modal-btn-danger { color: var(--danger); }
+.account-modal-btn-danger:hover { background: var(--danger-light); }
 
 .user-row {
   display: flex; align-items: center; gap: 12px; padding: 10px 0;
