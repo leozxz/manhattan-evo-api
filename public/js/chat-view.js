@@ -98,24 +98,32 @@ async function selectGroup(chat, el) {
             </button>
           </div>
           <input type="file" id="mediaFileInput" style="display:none" onchange="handleMediaFile(this)">
-          <button class="btn btn-secondary" onclick="toggleAttachMenu()" style="border-radius:50%;width:40px;height:40px;padding:0;flex-shrink:0" title="Anexar arquivo">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#54656f"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
-          </button>
-          <button class="ai-suggest-btn" id="aiSuggestBtn" onclick="requestAiSuggestion()" title="Sugestao IA">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#54656f"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2zm8 6l-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3zm-4 8l-1.5 4.5L8 22l-1.5-1.5L2 19l4.5-1.5L8 13l1.5 4.5z"/></svg>
-          </button>
-          <input type="text" id="msgInput" placeholder="Digite uma mensagem... (@mencionar)" onkeydown="handleMsgKeydown(event)" oninput="handleMentionInput(this)">
-          <div class="recording-bar" id="recordingBar" style="display:none">
-            <div class="recording-dot"></div>
-            <span class="recording-timer" id="recordingTimer">0:00</span>
-            <button class="recording-cancel" onclick="cancelRecording()">Cancelar</button>
+          <div class="input-row">
+            <div class="input-actions-left">
+              <button class="input-icon-btn" onclick="toggleAttachMenu()" title="Anexar">
+                <svg width="22" height="22" viewBox="0 0 24 24"><path d="M19.187 3.588a2.75 2.75 0 0 0-3.889 0l-9.97 9.97a3.75 3.75 0 1 0 5.304 5.303l7.07-7.07a.75.75 0 0 1 1.061 1.06l-7.07 7.071A5.25 5.25 0 1 1 4.268 12.5l9.97-9.97a4.25 4.25 0 0 1 6.01 6.01l-9.97 9.97a2.75 2.75 0 0 1-3.89-3.89l7.071-7.07a.75.75 0 0 1 1.06 1.06l-7.07 7.071a1.25 1.25 0 0 0 1.768 1.768l9.97-9.97a2.75 2.75 0 0 0 0-3.891z" fill="currentColor"/></svg>
+              </button>
+            </div>
+            <div class="input-field-wrap">
+              <input type="text" id="msgInput" placeholder="Mensagem" onkeydown="handleMsgKeydown(event)" oninput="handleMentionInput(this)">
+              <div class="recording-bar" id="recordingBar" style="display:none">
+                <div class="recording-dot"></div>
+                <span class="recording-timer" id="recordingTimer">0:00</span>
+                <button class="recording-cancel" onclick="cancelRecording()">Cancelar</button>
+              </div>
+            </div>
+            <div class="input-actions-right">
+              <button class="input-icon-btn ai-suggest-btn" id="aiSuggestBtn" onclick="requestAiSuggestion()" title="Sugestao IA">
+                <svg width="20" height="20" viewBox="0 0 24 24"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2zm8 6l-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3zm-4 8l-1.5 4.5L8 22l-1.5-1.5L2 19l4.5-1.5L8 13l1.5 4.5z" fill="currentColor"/></svg>
+              </button>
+              <button class="input-icon-btn record-btn" id="recordBtn" onclick="toggleRecording()" title="Gravar audio">
+                <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z" fill="currentColor"/></svg>
+              </button>
+              <button class="input-send-btn" id="sendBtn" onclick="sendMsg()" title="Enviar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+              </button>
+            </div>
           </div>
-          <button class="record-btn" id="recordBtn" onclick="toggleRecording()" title="Gravar audio">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#54656f"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
-          </button>
-          <button class="btn btn-primary" id="sendBtn" onclick="sendMsg()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-          </button>
         </div>
       </div>
       ${isGroup ? `<div class="group-panel" id="groupPanel" style="display:none">
