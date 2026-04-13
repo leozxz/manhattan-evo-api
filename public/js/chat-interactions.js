@@ -203,6 +203,10 @@ function highlightMentions(escapedHtml) {
   });
 }
 
+function linkifyText(escapedHtml) {
+  return escapedHtml.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="msg-link">$1</a>');
+}
+
 // =====================
 // MEDIA CACHE & LOADING
 // =====================

@@ -428,8 +428,8 @@ async function fetchAndRenderMessages() {
         quotedHtml +
         (sender ? '<div class="msg-sender">' + escapeHtml(sender) + '</div>' : '') +
         mediaHtml +
-        (caption ? '<div class="msg-caption">' + escapeHtml(caption) + '</div>' : '') +
-        (text ? highlightMentions(escapeHtml(text)) : '') +
+        (caption ? '<div class="msg-caption">' + linkifyText(highlightMentions(escapeHtml(caption))) + '</div>' : '') +
+        (text ? linkifyText(highlightMentions(escapeHtml(text))) : '') +
         '<span class="msg-time">' + time + '</span>';
       wrapper.appendChild(div);
 

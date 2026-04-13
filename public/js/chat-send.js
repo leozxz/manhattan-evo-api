@@ -29,7 +29,7 @@ async function sendMsg() {
       '<div class="msg-quoted-text">' + escapeHtml(qText) + '</div></div>';
   }
 
-  div.innerHTML = quotedHtml + highlightMentions(escapeHtml(text)) + '<span class="msg-time">' + now + '</span>';
+  div.innerHTML = quotedHtml + linkifyText(highlightMentions(escapeHtml(text))) + '<span class="msg-time">' + now + '</span>';
   wrapper.appendChild(div);
   container.appendChild(wrapper);
   container.scrollTop = container.scrollHeight;
@@ -40,7 +40,7 @@ async function sendMsg() {
   const sendNumber = await getSendNumber();
   console.log('[SEND]', { sendNumber, selectedGroup, phone: selectedGroupData?.phone, messageJid: selectedGroupData?.messageJid });
   if (!sendNumber) { toast('Numero nao encontrado', 'error'); return; }
-  const body = { number: sendNumber, text };
+  const body = { number: sendNumber, text, linkPreview: true };
 
   if (mentioned.length > 0) body.mentioned = mentioned;
   if (everyOne) body.everyOne = true;

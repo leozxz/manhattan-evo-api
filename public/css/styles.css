@@ -1617,6 +1617,8 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 .mention-item-name { font-weight: 500; }
 .mention-item-number { color: var(--text-muted); font-size: 12px; }
 .msg-mention { color: var(--accent); font-weight: 600; }
+.msg-link { color: #53bdeb; text-decoration: underline; word-break: break-all; }
+.msg-link:hover { color: #a8d8ea; }
 
 .msg-reactions {
   display: flex; gap: 4px; margin-top: 2px; flex-wrap: wrap;

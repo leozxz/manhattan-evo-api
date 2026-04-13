@@ -273,7 +273,7 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
           return;
         }
         const ok = await redis.enqueueMessage(
-          { type: 'text', instance, body: { number, text } },
+          { type: 'text', instance, body: { number, text, linkPreview: true } },
           new Date(sendAt).getTime()
         );
         if (!ok) {
