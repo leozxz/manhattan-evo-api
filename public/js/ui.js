@@ -141,7 +141,6 @@ function closeAccountModal() {
 // USER MANAGER (admin)
 // =====================
 function openUserManager() {
-  document.getElementById('sidebarUserMenu').classList.remove('open');
   document.getElementById('userManagerOverlay').style.display = 'flex';
   loadUserList();
 }
