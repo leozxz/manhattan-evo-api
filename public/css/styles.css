@@ -87,10 +87,11 @@ body {
 .sidebar-btn.active svg { fill: var(--accent); }
 
 .sidebar-label {
-  font-size: 13px; color: #9ca3af; opacity: 0; transition: opacity 0.15s;
+  font-size: 13px; color: #9ca3af; opacity: 0;
   pointer-events: none; overflow: hidden;
+  width: 0; transition: opacity 0.15s, width 0.25s;
 }
-.sidebar:hover .sidebar-label { opacity: 1; }
+.sidebar:hover .sidebar-label { opacity: 1; width: auto; }
 .sidebar-btn:hover .sidebar-label { color: #d1d5db; }
 .sidebar-btn.active .sidebar-label { color: var(--accent); }
 
