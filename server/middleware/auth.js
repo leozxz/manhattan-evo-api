@@ -551,4 +551,4 @@ async function handleLogout(req, res, securityHeaders) {
   res.end();
 }
 
-module.exports = { checkAuth, handleLogin, handleVerify, handleResend, handleRegisterPage, handleRegister, handleLogout, seedAdmin, hashPassword };
+module.exports = { checkAuth, handleLogin, handleVerify, handleResend, handleRegisterPage, handleRegister, handleLogout, seedAdmin, hashPassword, getPool };

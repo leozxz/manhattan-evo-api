@@ -23,7 +23,7 @@ const redis = require('./services/redis');
 const { evoRequest } = require('./services/evolution');
 
 // Middleware
-const { checkAuth, handleLogin, handleVerify, handleResend, handleRegisterPage, handleRegister, handleLogout, seedAdmin, hashPassword } = require('./middleware/auth');
+const { checkAuth, handleLogin, handleVerify, handleResend, handleRegisterPage, handleRegister, handleLogout, seedAdmin, hashPassword, getPool } = require('./middleware/auth');
 const { isRateLimited } = require('./middleware/rateLimit');
 
 // Routes
@@ -182,13 +182,16 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
             res.end(JSON.stringify({ error: 'role must be admin or user' }));
             return;
           }
-          const { Pool } = require('pg');
-          const db = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+          const db = getPool();
+          if (!db) {
+            res.writeHead(503, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+            res.end(JSON.stringify({ error: 'Database not configured' }));
+            return;
+          }
           const result = await db.query(
             'UPDATE "PanelUser" SET role = $1, "updatedAt" = NOW() WHERE id = $2 RETURNING id, username, name, role, email, active',
             [role, roleMatch[1]]
           );
-          await db.end();
           if (result.rows.length === 0) {
             res.writeHead(404, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
             res.end(JSON.stringify({ error: 'User not found' }));
@@ -215,17 +218,20 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
             res.end(JSON.stringify({ error: 'username and password required' }));
             return;
           }
-          const { Pool } = require('pg');
-          const db = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+          const db = getPool();
+          if (!db) {
+            res.writeHead(503, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+            res.end(JSON.stringify({ error: 'Database not configured' }));
+            return;
+          }
           const hash = await hashPassword(password);
           const result = await db.query(
             `INSERT INTO "PanelUser" (username, "passwordHash", name, role, email, phone)
-             VALUES ($1, $2, $3, 'admin', $4, $5)
+             VALUES ($1, $2, $3, 'user', $4, $5)
              ON CONFLICT (username) DO UPDATE SET "passwordHash" = $2, name = $3, email = COALESCE($4, "PanelUser".email), phone = COALESCE($5, "PanelUser".phone), "updatedAt" = NOW()
              RETURNING id, username, name, role, email, phone, "createdAt"`,
             [username, hash, name || username, email || null, phone || null]
           );
-          await db.end();
           res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
           res.end(JSON.stringify(result.rows[0]));
         } catch (err) {
@@ -237,10 +243,13 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
     }
     if (req.method === 'GET' && urlPath === '/api/users') {
       try {
-        const { Pool } = require('pg');
-        const db = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+        const db = getPool();
+        if (!db) {
+          res.writeHead(503, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+          res.end(JSON.stringify({ error: 'Database not configured' }));
+          return;
+        }
         const result = await db.query('SELECT id, username, name, role, email, active, "createdAt" FROM "PanelUser" ORDER BY "createdAt"');
-        await db.end();
         res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
         res.end(JSON.stringify(result.rows));
       } catch (err) {
