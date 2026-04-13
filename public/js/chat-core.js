@@ -86,30 +86,52 @@ function extractMessages(res) {
 function getMessageText(m) {
   const msg = m.message;
   if (!msg) return '';
+
+  // Handle viewOnceMessage wrapper (used by button/interactive messages)
+  const inner = msg.viewOnceMessage?.message || msg.viewOnceMessageV2?.message || msg;
+  const interactive = inner.interactiveMessage;
+  if (interactive) {
+    const body = interactive.body?.text || '';
+    const footer = interactive.footer?.text || '';
+    const buttons = interactive.nativeFlowMessage?.buttons;
+    let btnText = '';
+    if (buttons && Array.isArray(buttons)) {
+      const labels = buttons.map(b => {
+        try { return JSON.parse(b.buttonParamsJson || '{}').display_text || b.name || ''; } catch { return b.name || ''; }
+      }).filter(Boolean);
+      if (labels.length) btnText = '\n' + labels.map(l => '[ ' + l + ' ]').join('  ');
+    }
+    return (body + btnText).trim() || '';
+  }
+
   return msg.conversation
     || msg.extendedTextMessage?.text
     || msg.buttonsResponseMessage?.selectedDisplayText
     || msg.listResponseMessage?.title
     || msg.templateButtonReplyMessage?.selectedDisplayText
+    || inner.conversation
+    || inner.extendedTextMessage?.text
     || '';
 }
 
 function getMediaType(m) {
   const msg = m.message;
   if (!msg) return null;
-  if (msg.imageMessage) return 'image';
-  if (msg.videoMessage) return 'video';
-  if (msg.audioMessage) return 'audio';
-  if (msg.documentMessage) return 'document';
-  if (msg.stickerMessage) return 'sticker';
-  if (msg.locationMessage || msg.liveLocationMessage) return 'location';
+  const inner = msg.viewOnceMessage?.message || msg.viewOnceMessageV2?.message || msg;
+  if (inner.imageMessage) return 'image';
+  if (inner.videoMessage) return 'video';
+  if (inner.audioMessage) return 'audio';
+  if (inner.documentMessage) return 'document';
+  if (inner.stickerMessage) return 'sticker';
+  if (inner.locationMessage || inner.liveLocationMessage) return 'location';
   return null;
 }
 
 function getMediaCaption(m) {
   const msg = m.message;
   if (!msg) return '';
-  return msg.imageMessage?.caption || msg.videoMessage?.caption || msg.documentMessage?.caption || '';
+  const inner = msg.viewOnceMessage?.message || msg.viewOnceMessageV2?.message || msg;
+  return inner.imageMessage?.caption || inner.videoMessage?.caption || inner.documentMessage?.caption || '';
 }
 
 function getContextInfo(m) {

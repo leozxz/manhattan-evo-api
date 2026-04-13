@@ -122,16 +122,22 @@ async function loadGroups() {
     if (c.lastMessage) {
       const lm = c.lastMessage;
       const msg = lm.message || {};
-      lastMsgPreview = msg.conversation
-        || msg.extendedTextMessage?.text
-        || (msg.imageMessage ? '📷 Imagem' : '')
-        || (msg.videoMessage ? '🎬 Video' : '')
-        || (msg.audioMessage ? '🎵 Audio' : '')
-        || (msg.documentMessage ? '📄 Documento' : '')
-        || (msg.stickerMessage ? '🏷 Sticker' : '')
-        || (msg.locationMessage || msg.liveLocationMessage ? '📍 Localizacao' : '')
-        || (msg.contactMessage || msg.contactsArrayMessage ? '👤 Contato' : '')
-        || '';
+      const inner = msg.viewOnceMessage?.message || msg.viewOnceMessageV2?.message || msg;
+      const interactive = inner.interactiveMessage;
+      if (interactive) {
+        lastMsgPreview = interactive.body?.text || '🔘 Mensagem com botoes';
+      } else {
+        lastMsgPreview = inner.conversation
+          || inner.extendedTextMessage?.text
+          || (inner.imageMessage ? '📷 Imagem' : '')
+          || (inner.videoMessage ? '🎬 Video' : '')
+          || (inner.audioMessage ? '🎵 Audio' : '')
+          || (inner.documentMessage ? '📄 Documento' : '')
+          || (inner.stickerMessage ? '🏷 Sticker' : '')
+          || (inner.locationMessage || inner.liveLocationMessage ? '📍 Localizacao' : '')
+          || (inner.contactMessage || inner.contactsArrayMessage ? '👤 Contato' : '')
+          || '';
+      }
       if (lastMsgPreview.length > 80) lastMsgPreview = lastMsgPreview.substring(0, 80) + '...';
     }
 
