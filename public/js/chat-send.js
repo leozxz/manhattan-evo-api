@@ -234,6 +234,154 @@ async function sendLocation() {
 }
 
 // =====================
+// BUTTON MESSAGE SEND
+// =====================
+let buttonRows = [];
+
+function showButtonsModal() {
+  toggleAttachMenu();
+  buttonRows = [];
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'buttonsModal';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:480px">
+      <h3>Mensagem com botoes</h3>
+      <div class="form-group">
+        <label>Titulo</label>
+        <input type="text" id="btnTitle" placeholder="Titulo da mensagem" maxlength="60">
+      </div>
+      <div class="form-group">
+        <label>Descricao (opcional)</label>
+        <textarea id="btnDesc" placeholder="Texto da mensagem" rows="3" style="width:100%;padding:10px 12px;border:1px solid #dfe5e7;border-radius:8px;font-size:14px;resize:vertical;font-family:inherit"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Rodape (opcional)</label>
+        <input type="text" id="btnFooter" placeholder="Texto do rodape" maxlength="60">
+      </div>
+      <div class="form-group">
+        <label>Imagem (URL, opcional)</label>
+        <input type="text" id="btnThumb" placeholder="https://exemplo.com/imagem.jpg">
+      </div>
+      <div style="border-top:1px solid #e9edef;margin:16px 0 12px;padding-top:12px">
+        <label style="font-weight:600;font-size:14px">Botoes</label>
+        <div id="btnList" style="margin-top:8px"></div>
+        <div style="margin-top:8px">
+          <select id="btnTypeSelect" style="padding:8px;border:1px solid #dfe5e7;border-radius:8px;font-size:13px">
+            <option value="reply">Resposta rapida</option>
+            <option value="url">Abrir link</option>
+            <option value="call">Ligar</option>
+            <option value="copy">Copiar texto</option>
+          </select>
+          <button class="btn btn-secondary" onclick="addButtonRow()" style="margin-left:6px;padding:8px 12px;font-size:13px">+ Adicionar</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('buttonsModal').remove()">Cancelar</button>
+        <button class="btn btn-primary" onclick="sendButtonMessage()">Enviar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function addButtonRow() {
+  const type = document.getElementById('btnTypeSelect').value;
+  const maxButtons = type === 'reply' ? 3 : 3;
+  if (buttonRows.length >= maxButtons) return toast('Maximo de 3 botoes', 'error');
+  if (type === 'reply' && buttonRows.some(b => b.type !== 'reply')) return toast('Botoes de resposta nao podem ser misturados com outros tipos', 'error');
+  if (type !== 'reply' && buttonRows.some(b => b.type === 'reply')) return toast('Botoes de resposta nao podem ser misturados com outros tipos', 'error');
+
+  const id = Date.now();
+  buttonRows.push({ id, type, displayText: '', value: '' });
+  renderButtonRows();
+}
+
+function removeButtonRow(id) {
+  buttonRows = buttonRows.filter(b => b.id !== id);
+  renderButtonRows();
+}
+
+function renderButtonRows() {
+  const container = document.getElementById('btnList');
+  if (!container) return;
+  container.innerHTML = buttonRows.map(b => {
+    const typeLabels = { reply: 'Resposta', url: 'Link', call: 'Telefone', copy: 'Copiar' };
+    const valuePlaceholder = { reply: '', url: 'https://exemplo.com', call: '5511999999999', copy: 'Texto para copiar' };
+    const showValue = b.type !== 'reply';
+    return `<div class="btn-row" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;padding:8px;background:#f0f2f5;border-radius:8px">
+      <span style="font-size:11px;color:#667781;min-width:60px;font-weight:600">${typeLabels[b.type]}</span>
+      <input type="text" placeholder="Texto do botao" value="${escapeHtml(b.displayText)}" onchange="updateBtnField(${b.id},'displayText',this.value)" style="flex:1;padding:6px 8px;border:1px solid #dfe5e7;border-radius:6px;font-size:13px">
+      ${showValue ? '<input type="text" placeholder="' + valuePlaceholder[b.type] + '" value="' + escapeHtml(b.value) + '" onchange="updateBtnField(' + b.id + ',\'value\',this.value)" style="flex:1;padding:6px 8px;border:1px solid #dfe5e7;border-radius:6px;font-size:13px">' : ''}
+      <button onclick="removeButtonRow(${b.id})" style="background:none;border:none;cursor:pointer;color:#ea0038;font-size:18px;padding:0 4px" title="Remover">&times;</button>
+    </div>`;
+  }).join('');
+}
+
+function updateBtnField(id, field, value) {
+  const btn = buttonRows.find(b => b.id === id);
+  if (btn) btn[field] = value;
+}
+
+async function sendButtonMessage() {
+  if (!ensureConnected()) return;
+  const title = document.getElementById('btnTitle').value.trim();
+  const description = document.getElementById('btnDesc').value.trim();
+  const footer = document.getElementById('btnFooter').value.trim();
+  const thumbnailUrl = document.getElementById('btnThumb').value.trim();
+
+  if (!title) return toast('Titulo e obrigatorio', 'error');
+  if (buttonRows.length === 0) return toast('Adicione pelo menos um botao', 'error');
+
+  for (const b of buttonRows) {
+    if (!b.displayText.trim()) return toast('Preencha o texto de todos os botoes', 'error');
+    if (b.type === 'url' && !b.value.trim()) return toast('Preencha a URL do botao', 'error');
+    if (b.type === 'call' && !b.value.trim()) return toast('Preencha o telefone do botao', 'error');
+    if (b.type === 'copy' && !b.value.trim()) return toast('Preencha o texto para copiar', 'error');
+  }
+
+  const sendNumber = await getSendNumber();
+  if (!sendNumber) return toast('Numero nao encontrado', 'error');
+
+  const buttons = buttonRows.map(b => {
+    const btn = { type: b.type, displayText: b.displayText.trim() };
+    if (b.type === 'reply') btn.id = 'btn_' + Math.random().toString(36).substring(2, 8);
+    if (b.type === 'url') btn.url = b.value.trim();
+    if (b.type === 'call') btn.phoneNumber = b.value.trim();
+    if (b.type === 'copy') btn.copyCode = b.value.trim();
+    return btn;
+  });
+
+  const body = { number: sendNumber, title };
+  if (description) body.description = description;
+  if (footer) body.footer = footer;
+  if (thumbnailUrl) body.thumbnailUrl = thumbnailUrl;
+  body.buttons = buttons;
+
+  document.getElementById('buttonsModal').remove();
+  toast('Enviando mensagem com botoes...');
+
+  await sendPresence('composing');
+  await new Promise(r => setTimeout(r, randomDelay(1000, 3000)));
+
+  const res = await api('POST', '/message/sendButtons/' + currentInstance, body);
+  if (res.ok && res.data && res.data.key) {
+    toast('Mensagem com botoes enviada!');
+    const chat = allChats.find(c => c.id === selectedGroup);
+    if (chat) {
+      chat.lastMsgPreview = title;
+      chat.lastMsgFromMe = true;
+      renderGroupList();
+    }
+    lastMsgCount = 0;
+    fetchAndRenderMessages();
+  } else {
+    toast('Erro ao enviar mensagem com botoes', 'error');
+  }
+  sendPresence('paused');
+}
+
+// =====================
 // PRESENCE (anti-ban)
 // =====================
 function randomDelay(min, max) {

@@ -96,6 +96,10 @@ async function selectGroup(chat, el) {
               <svg viewBox="0 0 24 24" fill="#dc2626"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
               Localizacao
             </button>
+            <button class="attach-item" onclick="showButtonsModal()">
+              <svg viewBox="0 0 24 24" fill="#2563eb"><path d="M19 7H5c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm0 8H5V9h14v6zM7 10h4v4H7z"/></svg>
+              Botoes
+            </button>
           </div>
           <input type="file" id="mediaFileInput" style="display:none" onchange="handleMediaFile(this)">
           <button class="btn btn-secondary" onclick="toggleAttachMenu()" style="border-radius:50%;width:40px;height:40px;padding:0;flex-shrink:0" title="Anexar arquivo">
