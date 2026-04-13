@@ -33,7 +33,10 @@ function isWebhookRateLimited() {
 }
 
 function verifySignature(body, signature) {
-  if (!WEBHOOK_SECRET) return true; // No secret configured = skip verification
+  if (!WEBHOOK_SECRET) {
+    console.warn('[webhook] WARNING: WEBHOOK_SECRET not set — rejecting unsigned webhook. Set WEBHOOK_SECRET in .env to enable webhook reception.');
+    return false;
+  }
   if (!signature) return false;
   const expected = crypto.createHmac('sha256', WEBHOOK_SECRET).update(body).digest('hex');
   try {
@@ -72,7 +75,7 @@ function handleWebhook(req, res, securityHeaders) {
       if (!ALLOWED_EVENTS.has(event)) {
         console.warn('[webhook] REJECTED — unknown event:', event, 'from', req.socket?.remoteAddress);
         res.writeHead(400, { 'Content-Type': 'application/json', ...(securityHeaders || {}) });
-        res.end('{"error":"Event type not allowed: ' + event + '"}');
+        res.end(JSON.stringify({ error: 'Event type not allowed' }));
         return;
       }
 

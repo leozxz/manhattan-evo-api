@@ -62,19 +62,21 @@ async function destroySession(token) {
 }
 
 // =====================
-// 2FA CODE STORAGE (3 min TTL)
+// 2FA CODE STORAGE (3 min TTL, max 5 attempts)
 // =====================
 const memoryCodes = {};
+const MAX_2FA_ATTEMPTS = 5;
 
 async function storeCode(userId, code) {
   const key = 'mht:2fa:' + userId;
-  const stored = await redis.sessionSet(key, JSON.stringify({ code, created: Date.now() }));
-  if (!stored) memoryCodes[userId] = { code, created: Date.now() };
+  const stored = await redis.sessionSet(key, JSON.stringify({ code, created: Date.now(), attempts: 0 }));
+  if (!stored) memoryCodes[userId] = { code, created: Date.now(), attempts: 0 };
 }
 
 async function verifyCode(userId, code) {
   const key = 'mht:2fa:' + userId;
   let data = await redis.sessionGet?.(key);
+  let fromRedis = !!data;
   if (!data) data = memoryCodes[userId];
   else if (typeof data === 'string') data = JSON.parse(data);
 
@@ -84,7 +86,24 @@ async function verifyCode(userId, code) {
     delete memoryCodes[userId];
     return false;
   }
-  if (data.code !== code) return false;
+
+  // Check max attempts — invalidate code after too many failures
+  if (data.attempts >= MAX_2FA_ATTEMPTS) {
+    await redis.sessionDel(key);
+    delete memoryCodes[userId];
+    return false;
+  }
+
+  if (data.code !== code) {
+    // Increment attempt counter
+    data.attempts = (data.attempts || 0) + 1;
+    if (fromRedis) {
+      await redis.sessionSet(key, JSON.stringify(data));
+    } else {
+      memoryCodes[userId] = data;
+    }
+    return false;
+  }
 
   // Cleanup after successful verification
   await redis.sessionDel(key);
@@ -160,7 +179,11 @@ async function seedAdmin() {
   const count = await userCount();
   if (count > 0) return;
 
-  const password = process.env.ADMIN_PASS || 'admin123';
+  const password = process.env.ADMIN_PASS;
+  if (!password) {
+    console.error('[Auth] ADMIN_PASS not set — skipping admin seed. Set ADMIN_PASS in .env to create the admin user.');
+    return;
+  }
   const hash = await hashPassword(password);
   await db.query(
     `INSERT INTO "PanelUser" (username, "passwordHash", name, role) VALUES ($1, $2, $3, $4)
@@ -173,6 +196,10 @@ async function seedAdmin() {
 // =====================
 // HTML PAGES
 // =====================
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 const PAGE_STYLE = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,sans-serif;background:#f0f2f5;display:flex;align-items:center;justify-content:center;height:100vh}
 .login{background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);width:340px}
 h2{margin-bottom:8px;color:#111b21;text-align:center}
@@ -190,7 +217,7 @@ button:hover{background:#1da851}.err{color:#ea0038;font-size:13px;text-align:cen
 .resend:hover{text-decoration:underline;background:none}`;
 
 function loginPage(error) {
-  const errHtml = error ? '<div class="err">' + error + '</div>' : '';
+  const errHtml = error ? '<div class="err">' + escapeHtml(error) + '</div>' : '';
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Login - Manhattan</title><style>${PAGE_STYLE}</style></head>
 <body><div class="login"><h2>Manhattan</h2><p class="sub">Acesse sua conta</p>${errHtml}
@@ -204,14 +231,14 @@ function loginPage(error) {
 
 function registerPage(error, values) {
   const v = values || {};
-  const errHtml = error ? '<div class="err">' + error + '</div>' : '';
+  const errHtml = error ? '<div class="err">' + escapeHtml(error) + '</div>' : '';
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Criar Conta - Manhattan</title><style>${PAGE_STYLE}</style></head>
 <body><div class="login"><h2>Manhattan</h2><p class="sub">Crie sua conta</p>${errHtml}
 <form method="POST" action="/auth/register">
-<input name="user" placeholder="Usuario" required autocomplete="username" value="${v.user || ''}">
-<input name="email" type="email" placeholder="Email" required autocomplete="email" value="${v.email || ''}">
-<input name="phone" placeholder="Telefone (ex: 5511999999999)" required inputmode="numeric" value="${v.phone || ''}">
+<input name="user" placeholder="Usuario" required autocomplete="username" value="${escapeHtml(v.user)}">
+<input name="email" type="email" placeholder="Email" required autocomplete="email" value="${escapeHtml(v.email)}">
+<input name="phone" placeholder="Telefone (ex: 5511999999999)" required inputmode="numeric" value="${escapeHtml(v.phone)}">
 <input name="pass" type="password" placeholder="Senha" required autocomplete="new-password">
 <input name="pass2" type="password" placeholder="Confirmar senha" required autocomplete="new-password">
 <button type="submit">Criar conta</button></form>
@@ -221,19 +248,19 @@ function registerPage(error, values) {
 
 function mfaPage(pendingToken, phone, error) {
   const masked = phone ? phone.slice(0, 4) + '****' + phone.slice(-2) : '****';
-  const errHtml = error ? '<div class="err">' + error + '</div>' : '';
+  const errHtml = error ? '<div class="err">' + escapeHtml(error) + '</div>' : '';
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Verificacao - Manhattan</title><style>${PAGE_STYLE}</style></head>
 <body><div class="login"><h2>Verificacao</h2>
-<p class="sub">Enviamos um codigo para o WhatsApp<br><strong>${masked}</strong></p>${errHtml}
+<p class="sub">Enviamos um codigo para o WhatsApp<br><strong>${escapeHtml(masked)}</strong></p>${errHtml}
 <form method="POST" action="/auth/verify">
-<input type="hidden" name="token" value="${pendingToken}">
+<input type="hidden" name="token" value="${escapeHtml(pendingToken)}">
 <input name="code" class="code-input" placeholder="000000" maxlength="6" required autocomplete="one-time-code" inputmode="numeric">
 <button type="submit">Verificar</button>
 </form>
 <p class="timer">O codigo expira em 3 minutos</p>
 <form method="POST" action="/auth/resend" style="text-align:center">
-<input type="hidden" name="token" value="${pendingToken}">
+<input type="hidden" name="token" value="${escapeHtml(pendingToken)}">
 <button type="submit" class="resend">Reenviar codigo</button>
 </form>
 </div>
@@ -314,7 +341,7 @@ async function handleLogin(req, res, securityHeaders) {
       }
 
       // Generate 6-digit code and send via WhatsApp
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const code = crypto.randomInt(100000, 1000000).toString();
       await storeCode(dbUser.id, code);
 
       const pendingToken = crypto.randomBytes(32).toString('hex');
@@ -404,7 +431,7 @@ async function handleResend(req, res, securityHeaders) {
         return;
       }
 
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const code = crypto.randomInt(100000, 1000000).toString();
       await storeCode(pending.userId, code);
       await mc.sendWhatsAppCode(pending.phone, pending.email || pending.username, code);
 
@@ -479,20 +506,20 @@ async function handleRegister(req, res, securityHeaders) {
       const hash = await hashPassword(password);
       const result = await db.query(
         `INSERT INTO "PanelUser" (username, "passwordHash", name, email, phone, role, active)
-         VALUES ($1, $2, $3, $4, $5, 'admin', false) RETURNING id`,
+         VALUES ($1, $2, $3, $4, $5, 'user', false) RETURNING id`,
         [username, hash, username, email, phone]
       );
       const userId = result.rows[0].id;
 
       // Generate code and send via WhatsApp
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const code = crypto.randomInt(100000, 1000000).toString();
       await storeCode(userId, code);
 
       const pendingToken = crypto.randomBytes(32).toString('hex');
       await storePending(pendingToken, {
         userId,
         username,
-        role: 'admin',
+        role: 'user',
         phone,
         email,
         isRegistration: true,
