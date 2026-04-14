@@ -244,8 +244,12 @@ function openTaskModal(taskId) {
   const task = _taskCache.find(t => t.id === taskId);
   if (!task) return;
 
+  const priorityLabels = { alta: 'Alta', media: 'Media', baixa: 'Baixa' };
   const priorityColors = { alta: '#ef4444', media: '#f59e0b', baixa: '#3b82f6' };
-  const created = task.createdAt ? new Date(task.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  const statusLabels = { nova: 'Nova', pendente: 'Pendente', aceita: 'Aceita', concluida: 'Concluida', recusada: 'Recusada' };
+  const color = priorityColors[task.priority] || '#9ca3af';
+  const created = task.createdAt ? new Date(task.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  const dueDate = task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '';
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -253,37 +257,49 @@ function openTaskModal(taskId) {
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
   overlay.innerHTML = `
-    <div class="modal-box" style="width:380px" onclick="event.stopPropagation()">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <h3 style="font-size:15px;font-weight:700">Tarefa</h3>
-        <button onclick="document.getElementById('taskModal').remove()" style="border:none;background:none;font-size:20px;cursor:pointer;color:#999">&times;</button>
-      </div>
-      <div class="form-group">
-        <label style="font-size:11px;font-weight:600;color:var(--text-muted)">Titulo</label>
-        <input type="text" id="taskModalTitle" value="${escapeHtml(task.title)}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
-      </div>
-      <div class="form-group" style="margin-top:10px">
-        <label style="font-size:11px;font-weight:600;color:var(--text-muted)">Descricao</label>
-        <textarea id="taskModalDesc" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical">${escapeHtml(task.description || '')}</textarea>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:10px">
-        <div class="form-group" style="flex:1">
-          <label style="font-size:11px;font-weight:600;color:var(--text-muted)">Prioridade</label>
-          <select id="taskModalPriority" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px">
-            <option value="baixa" ${task.priority === 'baixa' ? 'selected' : ''}>Baixa</option>
-            <option value="media" ${task.priority === 'media' ? 'selected' : ''}>Media</option>
-            <option value="alta" ${task.priority === 'alta' ? 'selected' : ''}>Alta</option>
-          </select>
+    <div class="task-modal" onclick="event.stopPropagation()">
+      <div class="task-modal-accent" style="background:${color}"></div>
+      <div class="task-modal-header">
+        <div class="task-modal-header-left">
+          <span class="task-modal-priority-badge" style="background:${color}15;color:${color}">${priorityLabels[task.priority] || task.priority}</span>
+          <span class="task-modal-status-badge">${statusLabels[task.status] || task.status}</span>
         </div>
-        <div class="form-group" style="flex:1">
-          <label style="font-size:11px;font-weight:600;color:var(--text-muted)">Status</label>
-          <div style="padding:8px 10px;font-size:12px;color:var(--text-secondary);text-transform:capitalize">${task.status}</div>
-        </div>
+        <button class="task-modal-close" onclick="document.getElementById('taskModal').remove()">&times;</button>
       </div>
-      ${created ? '<div style="margin-top:10px;font-size:10px;color:var(--text-muted)">Criada em: ' + created + '</div>' : ''}
-      <div style="display:flex;gap:8px;margin-top:16px">
-        <button onclick="saveTaskModal('${task.id}')" class="btn btn-primary btn-sm" style="flex:1">Salvar</button>
-        <button onclick="completeTask('${task.id}')" class="btn btn-secondary btn-sm" style="flex:1">Concluir</button>
+      <div class="task-modal-body">
+        <div class="task-modal-field">
+          <label>Titulo</label>
+          <input type="text" id="taskModalTitle" value="${escapeHtml(task.title)}">
+        </div>
+        <div class="task-modal-field">
+          <label>Descricao</label>
+          <textarea id="taskModalDesc" rows="3" placeholder="Adicionar detalhes...">${escapeHtml(task.description || '')}</textarea>
+        </div>
+        <div class="task-modal-row">
+          <div class="task-modal-field" style="flex:1">
+            <label>Prioridade</label>
+            <select id="taskModalPriority">
+              <option value="baixa" ${task.priority === 'baixa' ? 'selected' : ''}>Baixa</option>
+              <option value="media" ${task.priority === 'media' ? 'selected' : ''}>Media</option>
+              <option value="alta" ${task.priority === 'alta' ? 'selected' : ''}>Alta</option>
+            </select>
+          </div>
+          <div class="task-modal-field" style="flex:1">
+            <label>Data limite</label>
+            <input type="date" id="taskModalDueDate" value="${dueDate}">
+          </div>
+        </div>
+        ${created ? '<div class="task-modal-meta">Criada em ' + created + '</div>' : ''}
+      </div>
+      <div class="task-modal-footer">
+        <button class="task-modal-btn-danger" onclick="rejectTask('${task.id}');document.getElementById('taskModal').remove()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          Excluir
+        </button>
+        <div style="display:flex;gap:8px;margin-left:auto">
+          <button class="task-modal-btn-secondary" onclick="completeTask('${task.id}')">Concluir</button>
+          <button class="task-modal-btn-primary" onclick="saveTaskModal('${task.id}')">Salvar</button>
+        </div>
       </div>
     </div>
   `;
@@ -295,10 +311,11 @@ async function saveTaskModal(taskId) {
   const title = document.getElementById('taskModalTitle').value.trim();
   const description = document.getElementById('taskModalDesc').value.trim();
   const priority = document.getElementById('taskModalPriority').value;
+  const dueDate = document.getElementById('taskModalDueDate')?.value || null;
   if (!title) return toast('Titulo obrigatorio', 'error');
 
   try {
-    await api('PUT', '/knowledge/task/' + currentInstance, { taskId, title, description, priority });
+    await api('PUT', '/knowledge/task/' + currentInstance, { taskId, title, description, priority, dueDate });
     toast('Tarefa atualizada');
     const modal = document.getElementById('taskModal');
     if (modal) modal.remove();
@@ -350,35 +367,42 @@ function showCreateTaskModal() {
   overlay.id = 'createTaskModal';
   overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
   overlay.innerHTML = `
-    <div class="modal-box" style="max-width:400px;background:var(--panel);border:1px solid var(--border)">
-      <div class="modal-header" style="background:var(--panel);border-bottom:1px solid var(--border-light)">
-        <h3 style="color:var(--text)">Nova tarefa</h3>
-        <button class="modal-close" style="color:var(--text-muted)" onclick="document.getElementById('createTaskModal').remove()">&times;</button>
+    <div class="task-modal" onclick="event.stopPropagation()">
+      <div class="task-modal-accent" style="background:var(--accent)"></div>
+      <div class="task-modal-header">
+        <div class="task-modal-header-left">
+          <span class="task-modal-priority-badge" style="background:rgba(0,209,102,0.1);color:var(--accent)">Nova tarefa</span>
+        </div>
+        <button class="task-modal-close" onclick="document.getElementById('createTaskModal').remove()">&times;</button>
       </div>
-      <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
-        <div>
-          <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">Titulo</label>
-          <input type="text" id="newTaskTitle" placeholder="Ex: Enviar proposta comercial" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--panel);color:var(--text)">
+      <div class="task-modal-body">
+        <div class="task-modal-field">
+          <label>Titulo</label>
+          <input type="text" id="newTaskTitle" placeholder="Ex: Enviar proposta comercial">
         </div>
-        <div>
-          <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">Descricao (opcional)</label>
-          <textarea id="newTaskDesc" rows="2" placeholder="Detalhes e contexto" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;font-family:inherit;background:var(--panel);color:var(--text)"></textarea>
+        <div class="task-modal-field">
+          <label>Descricao</label>
+          <textarea id="newTaskDesc" rows="3" placeholder="Detalhes e contexto..."></textarea>
         </div>
-        <div style="display:flex;gap:10px">
-          <div style="flex:1">
-            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">Prioridade</label>
-            <select id="newTaskPriority" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--panel);color:var(--text)">
+        <div class="task-modal-row">
+          <div class="task-modal-field" style="flex:1">
+            <label>Prioridade</label>
+            <select id="newTaskPriority">
               <option value="alta">Alta</option>
               <option value="media" selected>Media</option>
               <option value="baixa">Baixa</option>
             </select>
           </div>
-          <div style="flex:1">
-            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">Data limite</label>
-            <input type="date" id="newTaskDueDate" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--panel);color:var(--text)">
+          <div class="task-modal-field" style="flex:1">
+            <label>Data limite</label>
+            <input type="date" id="newTaskDueDate">
           </div>
         </div>
-        <button class="btn btn-primary" onclick="submitCreateTask()" style="margin-top:4px">Criar tarefa</button>
+      </div>
+      <div class="task-modal-footer">
+        <div style="margin-left:auto">
+          <button class="task-modal-btn-primary" onclick="submitCreateTask()">Criar tarefa</button>
+        </div>
       </div>
     </div>
   `;

@@ -1181,6 +1181,75 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 .task-reject-btn { background: var(--panel-alt); color: var(--text-muted); border: 1px solid var(--border-light); }
 .task-reject-btn:hover { background: var(--border-light); color: var(--text); }
 
+/* Task modal */
+.task-modal {
+  width: 440px; max-width: 95vw; background: var(--panel); border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15); overflow: hidden; position: relative;
+}
+.task-modal-accent { height: 4px; width: 100%; }
+.task-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px 0;
+}
+.task-modal-header-left { display: flex; align-items: center; gap: 8px; }
+.task-modal-priority-badge {
+  font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px;
+  text-transform: uppercase; letter-spacing: 0.3px;
+}
+.task-modal-status-badge {
+  font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 20px;
+  background: var(--panel-alt); color: var(--text-secondary); text-transform: capitalize;
+}
+.task-modal-close {
+  width: 32px; height: 32px; border: none; background: none;
+  font-size: 22px; color: var(--text-muted); cursor: pointer; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.task-modal-close:hover { background: var(--panel-alt); color: var(--text); }
+.task-modal-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+.task-modal-field label {
+  display: block; font-size: 11px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 6px;
+}
+.task-modal-field input,
+.task-modal-field textarea,
+.task-modal-field select {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+  font-size: 13px; background: var(--panel); color: var(--text); font-family: var(--font);
+  transition: border-color 0.2s, box-shadow 0.2s; outline: none; resize: vertical;
+}
+.task-modal-field input:focus,
+.task-modal-field textarea:focus,
+.task-modal-field select:focus {
+  border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,209,102,0.1);
+}
+.task-modal-field input::placeholder,
+.task-modal-field textarea::placeholder { color: var(--text-muted); }
+.task-modal-row { display: flex; gap: 12px; }
+.task-modal-meta { font-size: 11px; color: var(--text-muted); padding-top: 2px; }
+.task-modal-footer {
+  display: flex; align-items: center; padding: 12px 20px 16px;
+  border-top: 1px solid var(--border-light); gap: 8px;
+}
+.task-modal-btn-primary {
+  padding: 9px 20px; background: var(--accent); color: #fff; border: none;
+  border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: all 0.15s; font-family: var(--font);
+}
+.task-modal-btn-primary:hover { background: var(--accent-hover); }
+.task-modal-btn-secondary {
+  padding: 9px 20px; background: var(--panel-alt); color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px; font-size: 13px;
+  font-weight: 500; cursor: pointer; transition: all 0.15s; font-family: var(--font);
+}
+.task-modal-btn-secondary:hover { background: var(--border-light); }
+.task-modal-btn-danger {
+  padding: 8px 14px; background: none; color: var(--text-muted);
+  border: none; border-radius: 8px; font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 6px; transition: all 0.15s; font-family: var(--font);
+}
+.task-modal-btn-danger:hover { color: var(--danger); background: var(--danger-light); }
+
 /* Knowledge graph modal */
 .graph-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
 .graph-modal { background: #1a1d23; border-radius: 16px; width: 90vw; max-width: 900px; height: 75vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 8px 48px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.06); transition: all 0.3s ease; }
