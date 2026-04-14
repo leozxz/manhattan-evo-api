@@ -220,6 +220,8 @@ FOCO EXCLUSIVO — so crie tarefas para:
 - Agendamento de reuniao comercial
 - Follow-up de negociacao em andamento
 - Reclamacao que pode gerar cancelamento (retencao)
+- Investimentos, cotacao de moedas, cambio, aplicacoes financeiras
+- Consultoria financeira ou planejamento solicitado pelo cliente
 
 NAO CRIE tarefas para:
 - Duvidas simples ja respondidas
@@ -852,7 +854,7 @@ async function handleRequest(req, res, urlPath, fullApiPath) {
         const contactKnowledgeId = ck.rows[0].id;
         const result = await db.query(
           `INSERT INTO "ContactTask" ("contactKnowledgeId", title, description, priority, status, "dueDate")
-           VALUES ($1, $2, $3, $4, 'nova', $5) RETURNING *`,
+           VALUES ($1, $2, $3, $4, 'pendente', $5) RETURNING *`,
           [contactKnowledgeId, body.title.trim(), body.description?.trim() || null, body.priority || 'media', body.dueDate || null]
         );
         return json(201, result.rows[0]);

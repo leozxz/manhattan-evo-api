@@ -319,14 +319,14 @@ async function saveTaskModal(taskId) {
     toast('Tarefa atualizada');
     const modal = document.getElementById('taskModal');
     if (modal) modal.remove();
-    await loadTasksPanel();
+    await loadUnifiedPanel();
   } catch { toast('Erro ao salvar', 'error'); }
 }
 
 async function acceptTask(taskId) {
   try {
     await api('PUT', '/knowledge/task/' + currentInstance, { taskId, status: 'aceita' });
-    await loadTasksPanel();
+    await loadUnifiedPanel();
   } catch { toast('Erro ao aceitar tarefa', 'error'); }
 }
 
@@ -344,7 +344,7 @@ async function completeTask(taskId) {
     toast('Tarefa concluida!');
     const modal = document.getElementById('taskModal');
     if (modal) modal.remove();
-    await loadTasksPanel();
+    await loadUnifiedPanel();
   } catch { toast('Erro ao concluir tarefa', 'error'); }
 }
 
@@ -358,7 +358,7 @@ async function extractTasks() {
     else toast('Falha ao gerar tarefas', 'error');
   } catch (err) { toast('Erro: ' + err.message, 'error'); }
 
-  await loadTasksPanel();
+  await loadUnifiedPanel();
 }
 
 function showCreateTaskModal() {
@@ -427,7 +427,7 @@ async function submitCreateTask() {
     if (res.ok) {
       toast('Tarefa criada!');
       document.getElementById('createTaskModal').remove();
-      await loadTasksPanel();
+      await loadUnifiedPanel();
     } else {
       toast('Erro ao criar tarefa', 'error');
     }
