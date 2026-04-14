@@ -234,7 +234,7 @@ REGRAS:
 2. Prioridade: "alta" (dinheiro em jogo/urgente), "media" (oportunidade concreta), "baixa" (follow-up comercial).
 3. Inclua data limite se mencionada ou inferivel.
 4. Maximo 3 novas tarefas. Apenas as mais relevantes.
-5. NUNCA repita tarefas que ja existem (veja a lista abaixo).
+5. NUNCA repita tarefas que ja existem (veja a lista abaixo). Considere duplicata qualquer tarefa que tenha o MESMO SENTIDO, mesmo com palavras diferentes. Ex: "Enviar cotacao dolar" e "Mandar cotacao de moeda" sao a MESMA tarefa. "Follow-up proposta" e "Retomar negociacao da proposta" tambem. Na duvida, NAO crie.
 6. Se nao houver novas tarefas relevantes, retorne "tasks": [].
 
 TAREFAS JA EXISTENTES (NAO REPETIR):
@@ -615,12 +615,28 @@ async function extractTasks(instanceId, instanceName, remoteJid) {
   console.log('[Tasks] LLM returned', result.tasks.length, 'tasks:', result.tasks.map(t => '"' + t.title + '"'));
 
   // Append only truly new tasks (skip if title is too similar to ANY task including recusadas)
-  const existingTitles = allTasks.map(t => t.title.toLowerCase().trim());
+  const stopWords = new Set(['de','do','da','dos','das','o','a','os','as','um','uma','e','para','com','no','na','nos','nas','em','por','se','que','ao','aos']);
+  function extractKeywords(text) {
+    return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+  }
+  function wordSimilarity(a, b) {
+    const wordsA = extractKeywords(a);
+    const wordsB = extractKeywords(b);
+    if (wordsA.length === 0 || wordsB.length === 0) return 0;
+    const setB = new Set(wordsB);
+    const matches = wordsA.filter(w => setB.has(w)).length;
+    return matches / Math.min(wordsA.length, wordsB.length);
+  }
+  const existingTitlesAndDescs = allTasks.map(t => (t.title + ' ' + (t.description || '')).toLowerCase().trim());
   let added = 0;
-  for (const task of result.tasks.slice(0, 5)) {
+  for (const task of result.tasks.slice(0, 3)) {
     const newTitle = (task.title || '').toLowerCase().trim();
-    const isDuplicate = existingTitles.some(et =>
-      et === newTitle || et.includes(newTitle) || newTitle.includes(et)
+    const newFull = newTitle + ' ' + (task.description || '').toLowerCase().trim();
+    const isDuplicate = existingTitlesAndDescs.some(existing =>
+      existing === newTitle
+      || existing.includes(newTitle)
+      || newTitle.includes(existing.substring(0, existing.indexOf(' (') > 0 ? existing.indexOf(' (') : existing.length))
+      || wordSimilarity(newFull, existing) >= 0.35
     );
     if (isDuplicate) {
       console.log('[Tasks] SKIP duplicate:', task.title);
