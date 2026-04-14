@@ -87,7 +87,7 @@ async function loadUnifiedPanel() {
   // === TASKS ===
   const tasksHeader = document.createElement('div');
   tasksHeader.className = 'knowledge-category-header';
-  tasksHeader.innerHTML = '<span>Tarefas</span>';
+  tasksHeader.innerHTML = '<span>Tarefas</span><button class="task-add-btn" onclick="showCreateTaskModal()" title="Criar tarefa">+</button>';
   body.appendChild(tasksHeader);
 
   const taskContainer = document.createElement('div');
@@ -342,6 +342,72 @@ async function extractTasks() {
   } catch (err) { toast('Erro: ' + err.message, 'error'); }
 
   await loadTasksPanel();
+}
+
+function showCreateTaskModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'createTaskModal';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:400px;background:var(--panel);border:1px solid var(--border)">
+      <div class="modal-header" style="background:var(--panel);border-bottom:1px solid var(--border-light)">
+        <h3 style="color:var(--text)">Nova tarefa</h3>
+        <button class="modal-close" style="color:var(--text-muted)" onclick="document.getElementById('createTaskModal').remove()">&times;</button>
+      </div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">Titulo</label>
+          <input type="text" id="newTaskTitle" placeholder="Ex: Enviar proposta comercial" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--panel);color:var(--text)">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">Descricao (opcional)</label>
+          <textarea id="newTaskDesc" rows="2" placeholder="Detalhes e contexto" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;font-family:inherit;background:var(--panel);color:var(--text)"></textarea>
+        </div>
+        <div style="display:flex;gap:10px">
+          <div style="flex:1">
+            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">Prioridade</label>
+            <select id="newTaskPriority" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--panel);color:var(--text)">
+              <option value="alta">Alta</option>
+              <option value="media" selected>Media</option>
+              <option value="baixa">Baixa</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">Data limite</label>
+            <input type="date" id="newTaskDueDate" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--panel);color:var(--text)">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="submitCreateTask()" style="margin-top:4px">Criar tarefa</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('newTaskTitle').focus();
+}
+
+async function submitCreateTask() {
+  const title = document.getElementById('newTaskTitle').value.trim();
+  if (!title) return toast('Titulo e obrigatorio', 'error');
+
+  const body = {
+    remoteJid: selectedGroup,
+    title,
+    description: document.getElementById('newTaskDesc').value.trim() || undefined,
+    priority: document.getElementById('newTaskPriority').value,
+    dueDate: document.getElementById('newTaskDueDate').value || undefined,
+  };
+
+  try {
+    const res = await api('POST', '/knowledge/task/' + currentInstance, body);
+    if (res.ok) {
+      toast('Tarefa criada!');
+      document.getElementById('createTaskModal').remove();
+      await loadTasksPanel();
+    } else {
+      toast('Erro ao criar tarefa', 'error');
+    }
+  } catch { toast('Erro ao criar tarefa', 'error'); }
 }
 
 // =====================

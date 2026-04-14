@@ -210,24 +210,30 @@ Responda SOMENTE com JSON valido no seguinte formato:
   "summary": "Resumo atualizado do perfil do cliente"
 }`;
 
-const TASK_EXTRACTION_PROMPT = `Voce e um assistente que analisa conversas de WhatsApp e identifica tarefas/acoes pendentes para o atendente executar em relacao ao cliente.
+const TASK_EXTRACTION_PROMPT = `Voce e um assistente que analisa conversas de WhatsApp e identifica APENAS oportunidades financeiras, comerciais ou acoes concretas onde o atendente pode ajudar o cliente.
 
-Analise as mensagens e extraia NOVAS tarefas acionaveis. Exemplos:
-- Cliente pediu um documento → "Enviar documento X"
-- Cliente mencionou interesse em produto → "Apresentar produto Y"
-- Cliente tem duvida pendente → "Responder sobre Z"
-- Cliente agendou algo → "Confirmar agendamento para data"
-- Cliente reclamou de algo → "Resolver reclamacao sobre W"
-- Follow-up necessario → "Fazer follow-up sobre assunto"
+FOCO EXCLUSIVO — so crie tarefas para:
+- Oportunidade de venda/upsell (cliente demonstrou interesse em produto/servico)
+- Cobranca ou pendencia financeira (pagamento, boleto, fatura)
+- Proposta/orcamento solicitado ou prometido
+- Renovacao de contrato ou assinatura
+- Agendamento de reuniao comercial
+- Follow-up de negociacao em andamento
+- Reclamacao que pode gerar cancelamento (retencao)
+
+NAO CRIE tarefas para:
+- Duvidas simples ja respondidas
+- Conversas casuais ou saudacoes
+- Informacoes genericas compartilhadas
+- Qualquer coisa ja resolvida na conversa
 
 REGRAS:
-1. Extraia APENAS tarefas reais baseadas no conteudo das mensagens.
-2. Prioridade: "alta" (urgente/reclamacao), "media" (pedido normal), "baixa" (follow-up/lembrete).
+1. Seja MUITO seletivo. Na duvida, NAO crie a tarefa.
+2. Prioridade: "alta" (dinheiro em jogo/urgente), "media" (oportunidade concreta), "baixa" (follow-up comercial).
 3. Inclua data limite se mencionada ou inferivel.
-4. Maximo 5 novas tarefas. Foque nas mais relevantes e recentes.
-5. NAO crie tarefas para coisas ja resolvidas na conversa.
-6. NUNCA repita tarefas que ja existem (veja a lista abaixo). Se uma tarefa existente ainda faz sentido, NAO a recrie. Crie apenas tarefas NOVAS que ainda nao foram identificadas.
-7. Se nao houver novas tarefas a criar, retorne "tasks": [].
+4. Maximo 3 novas tarefas. Apenas as mais relevantes.
+5. NUNCA repita tarefas que ja existem (veja a lista abaixo).
+6. Se nao houver novas tarefas relevantes, retorne "tasks": [].
 
 TAREFAS JA EXISTENTES (NAO REPETIR):
 {existingTasks}
@@ -819,6 +825,40 @@ async function handleRequest(req, res, urlPath, fullApiPath) {
       } catch (err) {
         console.error('[Tasks] extractTasks failed:', err.message, err.stack);
         return json(500, { error: 'Task extraction failed: ' + err.message });
+      }
+    }
+
+    // POST /knowledge/task/:instanceName  body: { remoteJid, title, description?, priority?, dueDate? }
+    if (req.method === 'POST' && action === 'task') {
+      const body = await readBody(req);
+      if (!body.remoteJid || !body.title) return json(400, { error: 'remoteJid and title are required' });
+      try {
+        const db = getPool();
+        // Ensure ContactKnowledge exists
+        let ck = await db.query(
+          'SELECT id FROM "ContactKnowledge" WHERE "remoteJid" = $1 AND "instanceId" = $2',
+          [body.remoteJid, instanceId]
+        );
+        if (ck.rows.length === 0) {
+          await db.query(
+            'INSERT INTO "ContactKnowledge" ("remoteJid", "instanceId") VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [body.remoteJid, instanceId]
+          );
+          ck = await db.query(
+            'SELECT id FROM "ContactKnowledge" WHERE "remoteJid" = $1 AND "instanceId" = $2',
+            [body.remoteJid, instanceId]
+          );
+        }
+        const contactKnowledgeId = ck.rows[0].id;
+        const result = await db.query(
+          `INSERT INTO "ContactTask" ("contactKnowledgeId", title, description, priority, status, "dueDate")
+           VALUES ($1, $2, $3, $4, 'nova', $5) RETURNING *`,
+          [contactKnowledgeId, body.title.trim(), body.description?.trim() || null, body.priority || 'media', body.dueDate || null]
+        );
+        return json(201, result.rows[0]);
+      } catch (err) {
+        console.error('[Tasks] Manual create failed:', err.message);
+        return json(500, { error: 'Failed to create task' });
       }
     }
 
