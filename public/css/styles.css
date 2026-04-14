@@ -1123,23 +1123,6 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 .knowledge-section { margin-bottom: 8px; }
 
 .profile-card { padding: 10px 12px; }
-.profile-fields {
-  display: flex; flex-direction: column; gap: 1px;
-  background: var(--border-light); border-radius: 10px; overflow: hidden; margin-bottom: 10px;
-}
-.profile-field {
-  display: flex; align-items: baseline; gap: 8px;
-  padding: 7px 12px; background: var(--panel);
-}
-.profile-field-label {
-  font-size: 10.5px; font-weight: 600; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: 0.3px;
-  min-width: 68px; flex-shrink: 0;
-}
-.profile-field-value {
-  font-size: 12px; font-weight: 500; color: var(--text);
-  line-height: 1.35; min-width: 0;
-}
 .profile-summary {
   font-size: 11px; color: var(--text-secondary); line-height: 1.55;
   padding: 8px 12px; background: var(--panel-alt); border-radius: 8px;

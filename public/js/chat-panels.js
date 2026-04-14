@@ -75,62 +75,13 @@ async function loadUnifiedPanel() {
 
   body.innerHTML = '';
 
-  // === PROFILE CARD ===
+  // === SUMMARY ===
   const data = knowledgeRes.ok ? knowledgeRes.data : null;
-  if (data) {
-    const entities = data.entities || [];
-    const profileEl = document.createElement('div');
-    profileEl.className = 'profile-card';
-
-    // Build profile fields from entities
-    const profileFields = [];
-    const contactName = data.savedName || data.pushName || '';
-    if (contactName) profileFields.push({ icon: 'person', label: 'Nome', value: contactName });
-
-    // Map of labels to look for (case-insensitive partial match)
-    const fieldMap = [
-      { keys: ['idade','nascimento','aniversario'], icon: 'cake', label: 'Idade' },
-      { keys: ['patrimonio total','patrimonio'], icon: 'account_balance', label: 'Patrimonio' },
-      { keys: ['renda mensal','renda','salario'], icon: 'payments', label: 'Renda' },
-      { keys: ['profissao','cargo','empresa','trabalho'], icon: 'work', label: 'Trabalho' },
-      { keys: ['estado civil','casado','solteiro'], icon: 'favorite', label: 'Estado Civil' },
-      { keys: ['cidade','moradia','endereco','bairro'], icon: 'location_on', label: 'Moradia' },
-      { keys: ['perfil investidor','perfil do investidor'], icon: 'trending_up', label: 'Perfil' },
-      { keys: ['objetivo financeiro','meta financeira'], icon: 'flag', label: 'Objetivo' },
-    ];
-
-    const usedEntityIds = new Set();
-    for (const field of fieldMap) {
-      const match = entities.find(e =>
-        !usedEntityIds.has(e.id) &&
-        field.keys.some(k => e.label.toLowerCase().includes(k))
-      );
-      if (match) {
-        usedEntityIds.add(match.id);
-        profileFields.push({ icon: field.icon, label: field.label, value: match.value });
-      }
-    }
-
-    let profileHtml = '';
-    if (profileFields.length > 0) {
-      profileHtml = '<div class="profile-fields">' +
-        profileFields.map(f =>
-          '<div class="profile-field">' +
-            '<span class="profile-field-label">' + escapeHtml(f.label) + '</span>' +
-            '<span class="profile-field-value">' + escapeHtml(f.value) + '</span>' +
-          '</div>'
-        ).join('') +
-        '</div>';
-    }
-
-    if (data.summary) {
-      profileHtml += '<div class="profile-summary">' + escapeHtml(data.summary) + '</div>';
-    }
-
-    if (profileHtml) {
-      profileEl.innerHTML = profileHtml;
-      body.appendChild(profileEl);
-    }
+  if (data && data.summary) {
+    const summaryEl = document.createElement('div');
+    summaryEl.className = 'profile-card';
+    summaryEl.innerHTML = '<div class="profile-summary">' + escapeHtml(data.summary) + '</div>';
+    body.appendChild(summaryEl);
   }
 
   // === TASKS ===
