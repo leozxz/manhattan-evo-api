@@ -41,8 +41,10 @@ import { ProviderFiles } from './provider/sessions';
 import { PrismaRepository } from './repository/repository.service';
 import { CacheService } from './services/cache.service';
 import { WAMonitoringService } from './services/monitor.service';
+import { KnowledgeController } from './controllers/knowledge.controller';
 import { ProxyService } from './services/proxy.service';
 import { SettingsService } from './services/settings.service';
+import { KnowledgeExtractorService } from './services/knowledge-extractor.service';
 import { TemplateService } from './services/template.service';
 
 const logger = new Logger('WA MODULE');
@@ -137,5 +139,9 @@ export const n8nController = new N8nController(n8nService, prismaRepository, waM
 
 const evoaiService = new EvoaiService(waMonitor, prismaRepository, configService, openaiService);
 export const evoaiController = new EvoaiController(evoaiService, prismaRepository, waMonitor);
+
+// knowledge graph
+export const knowledgeExtractorService = new KnowledgeExtractorService(prismaRepository, cache);
+export const knowledgeController = new KnowledgeController(knowledgeExtractorService);
 
 logger.info('Module - ON');

@@ -56,7 +56,7 @@ import { chatwootImport } from '@api/integrations/chatbot/chatwoot/utils/chatwoo
 import * as s3Service from '@api/integrations/storage/s3/libs/minio.server';
 import { ProviderFiles } from '@api/provider/sessions';
 import { PrismaRepository, Query } from '@api/repository/repository.service';
-import { chatbotController, waMonitor } from '@api/server.module';
+import { chatbotController, knowledgeExtractorService, waMonitor } from '@api/server.module';
 import { CacheService } from '@api/services/cache.service';
 import { ChannelStartupService } from '@api/services/channel.service';
 import { Events, MessageSubtype, TypeMediaMessage, wa } from '@api/types/wa.types';
@@ -1498,6 +1498,25 @@ export class BaileysStartupService extends ChannelStartupService {
             msg: messageRaw,
             pushName: messageRaw.pushName,
           });
+
+          // Knowledge extraction — fire-and-forget (async, não bloqueia o fluxo)
+          const msgText =
+            messageRaw.message?.conversation ||
+            messageRaw.message?.extendedTextMessage?.text ||
+            messageRaw.message?.imageMessage?.caption ||
+            messageRaw.message?.videoMessage?.caption ||
+            '';
+          if (msgText) {
+            knowledgeExtractorService
+              .onMessage({
+                instanceId: this.instanceId,
+                remoteJid: messageRaw.key.remoteJid,
+                pushName: messageRaw.pushName,
+                messageText: msgText,
+                fromMe: messageRaw.key.fromMe,
+              })
+              .catch((err) => this.logger.error(['Knowledge extraction error', err?.message]));
+          }
 
           const contact = await this.prismaRepository.contact.findFirst({
             where: { remoteJid: received.key.remoteJid, instanceId: this.instanceId },

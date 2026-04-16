@@ -18,6 +18,7 @@ import { CallRouter } from './call.router';
 import { ChatRouter } from './chat.router';
 import { GroupRouter } from './group.router';
 import { InstanceRouter } from './instance.router';
+import { KnowledgeRouter } from './knowledge.router';
 import { LabelRouter } from './label.router';
 import { ProxyRouter } from './proxy.router';
 import { MessageRouter } from './sendMessage.router';
@@ -227,6 +228,7 @@ router
   .use('', new ChannelRouter(configService, ...guards).router)
   .use('', new EventRouter(configService, ...guards).router)
   .use('', new ChatbotRouter(...guards).router)
-  .use('', new StorageRouter(...guards).router);
+  .use('', new StorageRouter(...guards).router)
+  .use('', new KnowledgeRouter(...guards).router);
 
 export { HttpStatus, router };

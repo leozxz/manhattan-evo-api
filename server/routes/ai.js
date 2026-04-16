@@ -78,6 +78,97 @@ function handleAiSuggest(req, res, securityHeaders) {
   });
 }
 
+function handleAiGraphQuery(req, res, securityHeaders) {
+  let body = '';
+  req.on('data', c => { if (body.length < 65536) body += c; });
+  req.on('end', () => {
+    try {
+      const { question, entities, summary } = JSON.parse(body);
+      if (!question) {
+        res.writeHead(400, { 'Content-Type': 'application/json', ...securityHeaders });
+        res.end(JSON.stringify({ error: 'question required' }));
+        return;
+      }
+      const openaiKey = process.env.OPENAI_API_KEY || '';
+      if (!openaiKey) {
+        res.writeHead(500, { 'Content-Type': 'application/json', ...securityHeaders });
+        res.end(JSON.stringify({ error: 'OPENAI_API_KEY not configured' }));
+        return;
+      }
+
+      const entityList = (entities || []).map(e => e.category + ': ' + e.label + ' = ' + (e.value || '')).join('\n');
+
+      const prompt = JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Voce e um assistente que responde perguntas sobre um cliente com base no perfil extraido de conversas de WhatsApp.
+
+PERFIL DO CLIENTE:
+${summary || 'Sem resumo.'}
+
+ENTIDADES CONHECIDAS:
+${entityList || 'Nenhuma.'}
+
+REGRAS:
+1. Se a resposta esta nas entidades, responda e retorne "found": true com os labels das entidades relevantes em "matchLabels".
+2. Se a resposta NAO esta nas entidades, retorne "found": false e sugira uma mensagem natural que o atendente poderia enviar ao cliente para obter essa informacao, sem ser invasivo e mantendo o contexto da conversa.
+3. Responda SOMENTE com JSON valido.
+
+Formato:
+{"answer": "resposta", "found": true/false, "matchLabels": ["label1", "label2"], "suggestedMessage": "mensagem sugerida ou null"}`
+          },
+          { role: 'user', content: question }
+        ],
+        temperature: 0.3,
+        max_tokens: 300,
+        response_format: { type: 'json_object' },
+      });
+
+      const aiReq = https.request({
+        hostname: 'api.openai.com',
+        path: '/v1/chat/completions',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + openaiKey,
+          'Content-Length': Buffer.byteLength(prompt),
+        },
+      }, (aiRes) => {
+        let data = '';
+        aiRes.on('data', c => data += c);
+        aiRes.on('end', () => {
+          try {
+            if (aiRes.statusCode !== 200) {
+              res.writeHead(502, { 'Content-Type': 'application/json', ...securityHeaders });
+              res.end(JSON.stringify({ error: 'OpenAI API error' }));
+              return;
+            }
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.message?.content?.trim() || '{}';
+            const result = JSON.parse(content);
+            res.writeHead(200, { 'Content-Type': 'application/json', ...securityHeaders });
+            res.end(JSON.stringify(result));
+          } catch {
+            res.writeHead(500, { 'Content-Type': 'application/json', ...securityHeaders });
+            res.end(JSON.stringify({ error: 'Failed to parse AI response' }));
+          }
+        });
+      });
+      aiReq.on('error', () => {
+        res.writeHead(502, { 'Content-Type': 'application/json', ...securityHeaders });
+        res.end(JSON.stringify({ error: 'OpenAI unavailable' }));
+      });
+      aiReq.write(prompt);
+      aiReq.end();
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json', ...securityHeaders });
+      res.end(JSON.stringify({ error: 'Invalid request' }));
+    }
+  });
+}
+
 function handleAiSearch(req, res, securityHeaders) {
   let body = '';
   req.on('data', c => { if (body.length < 524288) body += c; });
@@ -292,4 +383,4 @@ Formato:
   });
 }
 
-module.exports = { handleAiSuggest, handleAiSearch, handleAiOrganize };
+module.exports = { handleAiSuggest, handleAiGraphQuery, handleAiSearch, handleAiOrganize };
