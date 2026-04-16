@@ -366,29 +366,15 @@ async function fetchAndRenderMessages() {
       const div = document.createElement('div');
       div.className = 'msg ' + (isOut ? 'msg-out' : 'msg-in');
 
-      // Hover actions
-      const hoverActions = document.createElement('div');
-      hoverActions.className = 'msg-hover-actions';
-
-      const replyBtn = document.createElement('button');
-      replyBtn.textContent = '\u{21A9}\u{FE0F}';
-      replyBtn.title = 'Responder';
-      replyBtn.addEventListener('click', (e) => {
+      // Dropdown arrow (WhatsApp Web style)
+      const arrow = document.createElement('button');
+      arrow.className = 'msg-dropdown-arrow';
+      arrow.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18"><path d="M3.15 5.4L9 11.25l5.85-5.85L16.5 7.05 9 14.55l-7.5-7.5z" fill="currentColor"/></svg>';
+      arrow.addEventListener('click', (e) => {
         e.stopPropagation();
-        setReplyTo(m);
+        showMsgContextMenu(wrapper, m, key, arrow);
       });
-      hoverActions.appendChild(replyBtn);
-
-      const reactBtn = document.createElement('button');
-      reactBtn.textContent = '\u{1F600}';
-      reactBtn.title = 'Reagir';
-      reactBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showReactionPicker(wrapper, key);
-      });
-      hoverActions.appendChild(reactBtn);
-
-      wrapper.appendChild(hoverActions);
+      div.appendChild(arrow);
 
       let mediaHtml = '';
       if (mediaType) {

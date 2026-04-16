@@ -280,6 +280,69 @@ async function loadMediaForMsg(m) {
 }
 
 // =====================
+// MESSAGE CONTEXT MENU
+// =====================
+let activeMsgMenu = null;
+
+function showMsgContextMenu(wrapper, msg, msgKey, arrowBtn) {
+  closeMsgContextMenu();
+
+  const menu = document.createElement('div');
+  menu.className = 'msg-context-menu';
+  menu.id = 'msgContextMenu';
+
+  const isOut = wrapper.classList.contains('msg-wrapper-out');
+
+  // Reply option
+  const replyItem = document.createElement('div');
+  replyItem.className = 'msg-context-item';
+  replyItem.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg> Responder';
+  replyItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeMsgContextMenu();
+    setReplyTo(msg);
+  });
+  menu.appendChild(replyItem);
+
+  // React option (opens emoji picker inline)
+  const reactItem = document.createElement('div');
+  reactItem.className = 'msg-context-item';
+  reactItem.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg> Reagir';
+  reactItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeMsgContextMenu();
+    showReactionPicker(wrapper, msgKey);
+  });
+  menu.appendChild(reactItem);
+
+  // Position the menu relative to the message bubble
+  const msgDiv = wrapper.querySelector('.msg');
+  if (msgDiv) {
+    msgDiv.style.position = 'relative';
+    menu.style.top = '0';
+    if (isOut) {
+      menu.style.right = '0';
+    } else {
+      menu.style.left = '0';
+    }
+    msgDiv.appendChild(menu);
+  }
+
+  activeMsgMenu = menu;
+
+  setTimeout(() => {
+    document.addEventListener('click', closeMsgContextMenu, { once: true });
+  }, 0);
+}
+
+function closeMsgContextMenu() {
+  if (activeMsgMenu) {
+    activeMsgMenu.remove();
+    activeMsgMenu = null;
+  }
+}
+
+// =====================
 // REACTIONS
 // =====================
 const REACTION_EMOJIS = ['\u{1F44D}', '\u{2764}\u{FE0F}', '\u{1F602}', '\u{1F62E}', '\u{1F622}', '\u{1F64F}', '\u{1F525}', '\u{1F389}'];
