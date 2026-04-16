@@ -275,4 +275,96 @@ Responda APENAS em JSON:
   });
 }
 
-module.exports = { handleAiSuggest, handleAiGraphQuery, handleAiSearch };
+function handleAiOrganize(req, res, securityHeaders) {
+  let body = '';
+  req.on('data', c => { if (body.length < 131072) body += c; });
+  req.on('end', () => {
+    try {
+      const { text } = JSON.parse(body);
+      if (!text || typeof text !== 'string' || text.trim().length < 10) {
+        res.writeHead(400, { 'Content-Type': 'application/json', ...securityHeaders });
+        res.end(JSON.stringify({ error: 'text required (min 10 chars)' }));
+        return;
+      }
+      const openaiKey = process.env.OPENAI_API_KEY || '';
+      if (!openaiKey) {
+        res.writeHead(500, { 'Content-Type': 'application/json', ...securityHeaders });
+        res.end(JSON.stringify({ error: 'OPENAI_API_KEY not configured' }));
+        return;
+      }
+
+      const reqBody = JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Voce e um assistente que organiza textos complexos em estruturas claras e visuais.
+
+O usuario vai colar um texto longo, confuso ou denso. Sua tarefa e:
+1. Extrair o titulo/tema principal
+2. Dividir em secoes logicas com headings claros
+3. Dentro de cada secao, listar os pontos-chave como bullets curtos e objetivos
+4. Adicionar uma conclusao/resumo final
+
+REGRAS:
+- Mantenha a essencia e informacoes do texto original, nao invente dados
+- Simplifique a linguagem mas preserve termos tecnicos importantes
+- Cada bullet deve ter no maximo 1-2 linhas
+- Maximo 5 secoes
+- Responda em portugues
+- Responda SOMENTE com JSON valido
+
+Formato:
+{"title": "Titulo principal", "sections": [{"heading": "Nome da secao", "points": ["ponto 1", "ponto 2"]}], "conclusion": "Resumo final em 1-2 frases"}`
+          },
+          { role: 'user', content: text }
+        ],
+        temperature: 0.3,
+        max_tokens: 1500,
+        response_format: { type: 'json_object' },
+      });
+
+      const aiReq = https.request({
+        hostname: 'api.openai.com',
+        path: '/v1/chat/completions',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + openaiKey,
+          'Content-Length': Buffer.byteLength(reqBody),
+        },
+      }, (aiRes) => {
+        let data = '';
+        aiRes.on('data', c => data += c);
+        aiRes.on('end', () => {
+          try {
+            if (aiRes.statusCode !== 200) {
+              res.writeHead(502, { 'Content-Type': 'application/json', ...securityHeaders });
+              res.end(JSON.stringify({ error: 'OpenAI API error' }));
+              return;
+            }
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.message?.content?.trim() || '{}';
+            const result = JSON.parse(content);
+            res.writeHead(200, { 'Content-Type': 'application/json', ...securityHeaders });
+            res.end(JSON.stringify(result));
+          } catch {
+            res.writeHead(500, { 'Content-Type': 'application/json', ...securityHeaders });
+            res.end(JSON.stringify({ error: 'Failed to parse AI response' }));
+          }
+        });
+      });
+      aiReq.on('error', () => {
+        res.writeHead(502, { 'Content-Type': 'application/json', ...securityHeaders });
+        res.end(JSON.stringify({ error: 'OpenAI API unavailable' }));
+      });
+      aiReq.write(reqBody);
+      aiReq.end();
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json', ...securityHeaders });
+      res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+    }
+  });
+}
+
+module.exports = { handleAiSuggest, handleAiGraphQuery, handleAiSearch, handleAiOrganize };
