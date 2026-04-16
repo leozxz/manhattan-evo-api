@@ -319,13 +319,19 @@ REGRAS DO GRAFICO:
 - Inclua "chart" SOMENTE se existirem dados numericos reais no texto
 - Se nao houver dados numericos, NAO inclua o campo "chart"
 - type pode ser: "bar", "pie", "line", "doughnut"
-- Escolha o tipo mais adequado para os dados (bar para comparacoes, pie/doughnut para proporcoes, line para tendencias)
-- labels e values devem ter o mesmo tamanho
-- values devem ser numeros
+- Escolha o tipo mais adequado:
+  * "bar" para comparacoes entre categorias (ex: vendas por produto, gastos por area)
+  * "pie" ou "doughnut" para proporcoes/distribuicao de um total (ex: 40% A, 30% B, 30% C)
+  * "line" para evolucao temporal ou tendencias (ex: receita por mes, crescimento ao longo do tempo)
+- IMPORTANTE: gere no MINIMO 4 pontos de dados para o grafico ficar visualmente bom
+- Se o texto menciona apenas 2 pontos temporais (ex: "em janeiro era X, agora e Y"), extrapole os meses intermediarios com valores proporcionais para criar uma linha suave
+- labels e values DEVEM ter o mesmo tamanho
+- values devem ser numeros (nao strings)
 - Use um chartTitle descritivo e curto
+- Para graficos de linha, se os labels forem meses, use abreviacoes (Jan, Fev, Mar, Abr, Mai, Jun, Jul, Ago, Set, Out, Nov, Dez)
 
 Formato:
-{"title": "Titulo principal", "sections": [{"heading": "Nome da secao", "points": ["ponto 1", "ponto 2"]}], "conclusion": "Resumo final em 1-2 frases", "chart": {"type": "bar", "chartTitle": "Titulo do grafico", "labels": ["A", "B", "C"], "values": [10, 20, 30]}}`
+{"title": "Titulo principal", "sections": [{"heading": "Nome da secao", "points": ["ponto 1", "ponto 2"]}], "conclusion": "Resumo final em 1-2 frases", "chart": {"type": "bar", "chartTitle": "Titulo do grafico", "labels": ["A", "B", "C", "D"], "values": [10, 20, 30, 25]}}`
           },
           { role: 'user', content: text }
         ],

@@ -160,18 +160,33 @@ function renderChartToImage(chart) {
     }
 
     const isPie = chart.type === 'pie' || chart.type === 'doughnut';
+    const isLine = chart.type === 'line';
 
-    const datasets = [{
+    const dataset = {
       data: chart.values,
       backgroundColor: isPie
         ? CHART_COLORS.slice(0, chart.labels.length)
-        : ACCENT,
+        : isLine
+          ? 'rgba(51, 229, 176, 0.12)'
+          : ACCENT,
       borderColor: isPie
         ? '#1f1f21'
         : ACCENT,
-      borderWidth: isPie ? 2 : 0,
-      borderRadius: isPie ? 0 : 4,
-    }];
+      borderWidth: isPie ? 2 : isLine ? 3 : 0,
+      borderRadius: isPie || isLine ? 0 : 4,
+    };
+
+    if (isLine) {
+      dataset.tension = 0.35;
+      dataset.fill = true;
+      dataset.pointBackgroundColor = ACCENT;
+      dataset.pointBorderColor = '#1f1f21';
+      dataset.pointBorderWidth = 2;
+      dataset.pointRadius = 5;
+      dataset.pointHoverRadius = 7;
+    }
+
+    const datasets = [dataset];
 
     const instance = new Chart(chartCanvas.getContext('2d'), {
       type: chart.type || 'bar',
