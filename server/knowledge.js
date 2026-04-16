@@ -673,6 +673,21 @@ async function getContactTasks(instanceId, remoteJid) {
   return result.rows;
 }
 
+async function getAllTasks(instanceId) {
+  const db = getPool();
+  const result = await db.query(`
+    SELECT ct.*, ck."remoteJid", ck."pushName", ck."savedName"
+    FROM "ContactTask" ct
+    JOIN "ContactKnowledge" ck ON ct."contactKnowledgeId" = ck.id
+    WHERE ck."instanceId" = $1
+      AND ct.status NOT IN ('recusada', 'concluida')
+    ORDER BY
+      CASE ct.priority WHEN 'alta' THEN 0 WHEN 'media' THEN 1 WHEN 'baixa' THEN 2 ELSE 3 END,
+      ct."createdAt" DESC
+  `, [instanceId]);
+  return result.rows;
+}
+
 async function updateTask(taskId, updates) {
   const db = getPool();
   const fields = [];
@@ -825,9 +840,13 @@ async function handleRequest(req, res, urlPath, fullApiPath) {
     }
 
     // GET /knowledge/tasks/:instanceName?remoteJid=...
+    // If no remoteJid, returns ALL open tasks across all contacts
     if (req.method === 'GET' && action === 'tasks') {
-      if (!query.remoteJid) return json(400, { error: 'remoteJid query param required' });
-      const tasks = await getContactTasks(instanceId, query.remoteJid);
+      if (query.remoteJid) {
+        const tasks = await getContactTasks(instanceId, query.remoteJid);
+        return json(200, tasks);
+      }
+      const tasks = await getAllTasks(instanceId);
       return json(200, tasks);
     }
 

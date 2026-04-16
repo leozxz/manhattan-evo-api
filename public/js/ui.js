@@ -274,10 +274,10 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  const idx = ['connect','group','chat','ai','dashboard'].indexOf(name);
+  const idx = ['connect','group','chat','ai','tarefas','dashboard'].indexOf(name);
   if (idx >= 0) document.querySelectorAll('.sidebar-btn')[idx].classList.add('active');
 
-  const titles = { connect: 'Conexoes', group: 'Criar Grupo', chat: 'Mensagens', ai: 'Busca IA', dashboard: 'Dashboard' };
+  const titles = { connect: 'Conexoes', group: 'Criar Grupo', chat: 'Mensagens', ai: 'Busca IA', tarefas: 'Tarefas', dashboard: 'Dashboard' };
   document.getElementById('pageTitle').textContent = titles[name];
 
   // Chat page uses fullscreen (hide header, expand content)
@@ -302,6 +302,7 @@ function showPage(name) {
   else stopMsgPolling();
   if (name === 'dashboard') startDashboard();
   else stopDashboard();
+  if (name === 'tarefas') loadTarefasPage();
 }
 
 // Format phone number for display: +55 11 99999-9999

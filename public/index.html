@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WhatsApp Manager</title>
   <link rel="icon" type="image/png" href="favicon.png">
-  <link rel="stylesheet" href="css/styles.css?v=55">
+  <link rel="stylesheet" href="css/styles.css?v=56">
 </head>
 <body>
 
@@ -31,6 +31,10 @@
     <button class="sidebar-btn" onclick="showPage('ai')" title="IA">
       <svg viewBox="0 0 24 24"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2zm8 6l-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3zm-4 8l-1.5 4.5L8 22l-1.5-1.5L2 19l4.5-1.5L8 13l1.5 4.5z"/></svg>
       <span class="sidebar-label">Busca IA</span>
+    </button>
+    <button class="sidebar-btn" onclick="showPage('tarefas')" title="Tarefas">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2zm0 4H7v-2h10v2zm0-8H7V7h10v2z"/></svg>
+      <span class="sidebar-label">Tarefas</span>
     </button>
     <button class="sidebar-btn" onclick="showPage('dashboard')" title="Dashboard">
       <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
@@ -179,6 +183,11 @@
         </div>
       </div>
 
+      <!-- Page: Tarefas -->
+      <div class="page" id="page-tarefas">
+        <div id="tarefasContent"></div>
+      </div>
+
       <!-- Page: Dashboard -->
       <div class="page" id="page-dashboard">
         <div class="dash-container" id="dashboardContent">
@@ -269,7 +278,7 @@
   </div>
 
   <script src="js/lib/chart.min.js"></script>
-  <script src="js/ui.js?v=23"></script>
+  <script src="js/ui.js?v=24"></script>
   <script src="js/instances.js?v=26"></script>
   <script src="js/groups.js?v=21"></script>
   <script src="js/jid-utils.js?v=1"></script>
@@ -283,6 +292,7 @@
   <script src="js/chat-organize.js?v=1"></script>
   <script src="js/chat-ai.js?v=20"></script>
   <script src="js/ai-search.js?v=5"></script>
+  <script src="js/tarefas.js?v=1"></script>
   <script src="js/chat-init.js?v=24"></script>
   <script src="js/dashboard.js?v=20"></script>
 </body>
