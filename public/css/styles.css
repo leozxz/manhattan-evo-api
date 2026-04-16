@@ -1262,30 +1262,6 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 }
 .task-modal-btn-danger:hover { color: var(--danger); background: var(--danger-light); }
 
-/* Knowledge graph modal */
-.graph-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
-.graph-modal { background: #1a1d23; border-radius: 16px; width: 90vw; max-width: 900px; height: 75vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 8px 48px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.06); transition: all 0.3s ease; }
-.graph-modal-fullscreen { width: 100vw !important; max-width: 100vw !important; height: 100vh !important; border-radius: 0 !important; }
-.graph-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 14px; font-weight: 700; flex-shrink: 0; color: #e5e7eb; }
-.graph-modal-body { flex: 1; position: relative; overflow: hidden; }
-.graph-modal-body canvas { width: 100%; height: 100%; display: block; }
-.graph-fullscreen-btn { transition: transform 0.15s; }
-.graph-fullscreen-btn:hover { transform: scale(1.1); }
-.graph-ai-bar {
-  display: flex; align-items: center; gap: 10px; padding: 10px 20px;
-  border-top: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; background: #141720;
-}
-.graph-ai-bar input { color: #e5e7eb; }
-.graph-ai-bar input::placeholder { color: #667781; }
-.graph-legend { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 20px; border-top: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; background: #141720; }
-.graph-legend-item {
-  display: flex; align-items: center; gap: 5px; font-size: 11px; color: #9ca3af;
-  padding: 4px 10px; border-radius: 6px; transition: all 0.15s; user-select: none;
-}
-.graph-legend-item:hover { background: rgba(255,255,255,0.06); }
-.graph-legend-active { background: rgba(255,255,255,0.08); color: #e5e7eb; font-weight: 600; }
-.graph-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-
 /* Panel tabs */
 /* ── Group panel tabs ── */
 .gp-header {

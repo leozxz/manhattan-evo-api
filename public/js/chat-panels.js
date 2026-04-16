@@ -721,17 +721,9 @@ async function loadParticipants() {
         <div class="gp-member-phone">${displayName ? escapeHtml(phoneFormatted) : 'Membro'}</div>
       </div>
       <div class="gp-member-actions">
-        <button class="gp-member-btn gp-btn-graph" title="Ver perfil" onclick="event.stopPropagation(); openParticipantGraph('${escapeHtml(jid)}', '${escapeHtml(displayName || phoneFormatted)}')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2z"/></svg>
-        </button>
         ${!isSuperAdmin ? '<button class="gp-member-btn gp-btn-remove" onclick="event.stopPropagation(); removeMember(\'' + escapeHtml(phoneRaw) + '\')" title="Remover"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' : ''}
       </div>
     `;
-    el.style.cursor = 'pointer';
-    el.onclick = (e) => {
-      if (e.target.closest('.gp-member-btn')) return;
-      openParticipantGraph(jid, displayName || phoneFormatted);
-    };
     list.appendChild(el);
   });
   body.appendChild(list);

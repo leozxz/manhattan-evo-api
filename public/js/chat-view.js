@@ -154,9 +154,6 @@ async function selectGroup(chat, el) {
           <button class="btn btn-secondary btn-sm" onclick="forceRefreshPanel()" title="Atualizar perfil">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="#54656f"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
           </button>
-          <button class="btn btn-secondary btn-sm" onclick="openKnowledgeGraph()" title="Visualizar grafo">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="#54656f"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><line x1="7.5" y1="12" x2="16.5" y2="6" stroke="#54656f" stroke-width="1.5"/><line x1="7.5" y1="12" x2="16.5" y2="18" stroke="#54656f" stroke-width="1.5"/></svg>
-          </button>
         </div>
         <div class="group-panel-body" id="knowledgePanelBody">
           <div class="spinner" style="margin-top:40px"></div>
