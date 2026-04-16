@@ -255,23 +255,15 @@ body {
   box-shadow: 0 0 0 2px rgba(0,209,102,0.15), 0 4px 16px rgba(0,0,0,0.06);
 }
 
-/* ── Top: dot + name + role tag ── */
+/* ── Top: name left, ribbons absolute right ── */
 .ic-top {
-  display: flex; align-items: center; gap: 10px;
-  padding: 18px 20px 0; flex-wrap: wrap;
+  position: relative;
+  padding: 20px 20px 0;
 }
-.ic-status-dot {
-  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-}
-.ic-dot-open { background: #10b981; box-shadow: 0 0 6px rgba(16,185,129,0.4); }
-.ic-dot-closed { background: #d1d5db; }
-.ic-dot-connecting { background: #f59e0b; animation: dotPulse 1.2s ease-in-out infinite; }
-@keyframes dotPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-
 .ic-name {
-  flex: 1; min-width: 0;
+  width: calc(100% - 110px);
   border: none; border-bottom: 1.5px solid transparent;
-  font-size: 16px; font-weight: 700; color: #111827;
+  font-size: 17px; font-weight: 700; color: #111827;
   padding: 4px 0; background: none; outline: none;
   letter-spacing: -0.2px;
   transition: border-color 0.2s;
@@ -279,25 +271,41 @@ body {
 .ic-name:focus { border-bottom-color: var(--accent); }
 .ic-name[readonly] { cursor: inherit; }
 
-.ic-role-tag {
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.5px; padding: 3px 8px; border-radius: 6px;
-  flex-shrink: 0;
+/* ── 3D ribbon tags (absolute, stacked right edge) ── */
+.ic-ribbons {
+  position: absolute; top: 12px; right: -5px;
+  display: flex; flex-direction: column; gap: 5px;
+  align-items: flex-end;
 }
-.ic-role-admin { background: #ede9fe; color: #6366f1; }
-.ic-role-conv { background: #dbeafe; color: #3b82f6; }
-
-.ic-active-label {
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.5px; padding: 3px 8px; border-radius: 6px;
-  background: #d1fae5; color: #059669; flex-shrink: 0;
+.ic-ribbon {
+  font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 5px 12px 5px 10px;
+  border-radius: 4px 0 0 4px;
+  box-shadow: -1px 2px 5px rgba(0,0,0,0.15);
+  position: relative;
 }
+/* 3D fold under the ribbon */
+.ic-ribbon::after {
+  content: '';
+  position: absolute; right: 0; bottom: -5px;
+  width: 0; height: 0;
+  border-top: 5px solid; border-right: 6px solid transparent;
+}
+.ic-ribbon-open { background: #10b981; color: #fff; }
+.ic-ribbon-open::after { border-top-color: #0a8c62; }
+.ic-ribbon-closed { background: #ef4444; color: #fff; }
+.ic-ribbon-closed::after { border-top-color: #b91c1c; }
+.ic-ribbon-connecting { background: #f59e0b; color: #fff; }
+.ic-ribbon-connecting::after { border-top-color: #b45309; }
+.ic-ribbon-role-admin { background: #6366f1; color: #fff; }
+.ic-ribbon-role-admin::after { border-top-color: #4338ca; }
+.ic-ribbon-role-conv { background: #3b82f6; color: #fff; }
+.ic-ribbon-role-conv::after { border-top-color: #1d4ed8; }
+.ic-ribbon-active { background: #111827; color: #fff; }
+.ic-ribbon-active::after { border-top-color: #000; }
 
 /* ── Card body ── */
-.ic-body { padding: 8px 20px; min-height: 48px; }
-.ic-connected-icon {
-  text-align: center; color: #10b981; padding: 4px 0;
-}
+.ic-body { padding: 8px 20px; min-height: 60px; }
 
 /* ── Role segmented toggle ── */
 .ic-toggle-row {
