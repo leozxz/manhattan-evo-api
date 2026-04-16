@@ -305,6 +305,7 @@ O usuario vai colar um texto longo, confuso ou denso. Sua tarefa e:
 2. Dividir em secoes logicas com headings claros
 3. Dentro de cada secao, listar os pontos-chave como bullets curtos e objetivos
 4. Adicionar uma conclusao/resumo final
+5. Se houver dados numericos, comparacoes, percentuais, valores ou tendencias no texto, gerar UM grafico adequado
 
 REGRAS:
 - Mantenha a essencia e informacoes do texto original, nao invente dados
@@ -314,8 +315,17 @@ REGRAS:
 - Responda em portugues
 - Responda SOMENTE com JSON valido
 
+REGRAS DO GRAFICO:
+- Inclua "chart" SOMENTE se existirem dados numericos reais no texto
+- Se nao houver dados numericos, NAO inclua o campo "chart"
+- type pode ser: "bar", "pie", "line", "doughnut"
+- Escolha o tipo mais adequado para os dados (bar para comparacoes, pie/doughnut para proporcoes, line para tendencias)
+- labels e values devem ter o mesmo tamanho
+- values devem ser numeros
+- Use um chartTitle descritivo e curto
+
 Formato:
-{"title": "Titulo principal", "sections": [{"heading": "Nome da secao", "points": ["ponto 1", "ponto 2"]}], "conclusion": "Resumo final em 1-2 frases"}`
+{"title": "Titulo principal", "sections": [{"heading": "Nome da secao", "points": ["ponto 1", "ponto 2"]}], "conclusion": "Resumo final em 1-2 frases", "chart": {"type": "bar", "chartTitle": "Titulo do grafico", "labels": ["A", "B", "C"], "values": [10, 20, 30]}}`
           },
           { role: 'user', content: text }
         ],

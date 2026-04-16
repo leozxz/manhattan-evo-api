@@ -3,6 +3,7 @@
 // =====================
 
 let organizeLoading = false;
+let lastOrganizeData = null;
 
 function openOrganizeModal() {
   toggleAttachMenu();
@@ -32,6 +33,7 @@ function openOrganizeModal() {
         <div class="organize-result-content">
           <div class="organize-img-wrap">
             <canvas id="organizeCanvas" style="display:none"></canvas>
+            <canvas id="organizeChartCanvas" style="display:none" width="720" height="400"></canvas>
             <img id="organizePreviewImg" class="organize-preview-img">
           </div>
           <div class="organize-text-preview" id="organizeTextPreview"></div>
@@ -71,8 +73,6 @@ function organizeBack() {
   document.getElementById('organizeResultView').style.display = 'none';
 }
 
-let lastOrganizeData = null;
-
 async function runOrganize() {
   const textarea = document.getElementById('organizeText');
   const text = textarea?.value?.trim();
@@ -99,7 +99,7 @@ async function runOrganize() {
     }
 
     lastOrganizeData = data;
-    renderOrganizeResult(data);
+    await renderOrganizeResult(data);
   } catch (err) {
     toast('Erro ao conectar com IA: ' + err.message, 'error');
   } finally {
@@ -110,9 +110,15 @@ async function runOrganize() {
   }
 }
 
-function renderOrganizeResult(data) {
-  // Generate image
-  generateOrganizeImage(data);
+async function renderOrganizeResult(data) {
+  // Render chart first if present (need to wait for Chart.js render)
+  let chartImage = null;
+  if (data.chart && data.chart.labels && data.chart.values) {
+    chartImage = await renderChartToImage(data.chart);
+  }
+
+  // Generate final image
+  generateOrganizeImage(data, chartImage);
 
   // Render text preview
   const preview = document.getElementById('organizeTextPreview');
@@ -136,7 +142,97 @@ function renderOrganizeResult(data) {
   document.getElementById('organizeResultView').style.display = '';
 }
 
-function generateOrganizeImage(data) {
+function renderChartToImage(chart) {
+  return new Promise((resolve) => {
+    const chartCanvas = document.getElementById('organizeChartCanvas');
+    chartCanvas.width = 720;
+    chartCanvas.height = 400;
+
+    const ACCENT = '#33e5b0';
+    const CHART_COLORS = [
+      '#33e5b0', '#5b8def', '#f0c644', '#e85d75',
+      '#a78bfa', '#f97316', '#06b6d4', '#ec4899',
+    ];
+
+    // Destroy previous chart instance if any
+    if (chartCanvas._chartInstance) {
+      chartCanvas._chartInstance.destroy();
+    }
+
+    const isPie = chart.type === 'pie' || chart.type === 'doughnut';
+
+    const datasets = [{
+      data: chart.values,
+      backgroundColor: isPie
+        ? CHART_COLORS.slice(0, chart.labels.length)
+        : ACCENT,
+      borderColor: isPie
+        ? '#1f1f21'
+        : ACCENT,
+      borderWidth: isPie ? 2 : 0,
+      borderRadius: isPie ? 0 : 4,
+    }];
+
+    const instance = new Chart(chartCanvas.getContext('2d'), {
+      type: chart.type || 'bar',
+      data: {
+        labels: chart.labels,
+        datasets: datasets,
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        plugins: {
+          title: {
+            display: true,
+            text: chart.chartTitle || '',
+            color: ACCENT,
+            font: { size: 16, weight: 'bold' },
+            padding: { bottom: 16 },
+          },
+          legend: {
+            display: isPie,
+            position: 'bottom',
+            labels: { color: '#f3f1e8', font: { size: 12 }, padding: 12 },
+          },
+        },
+        scales: isPie ? {} : {
+          x: {
+            ticks: { color: '#f3f1e8', font: { size: 11 } },
+            grid: { color: 'rgba(255,255,255,0.06)' },
+          },
+          y: {
+            ticks: { color: '#f3f1e8', font: { size: 11 } },
+            grid: { color: 'rgba(255,255,255,0.06)' },
+          },
+        },
+        layout: { padding: 16 },
+      },
+      plugins: [{
+        beforeDraw: (c) => {
+          const ctx = c.ctx;
+          ctx.save();
+          ctx.fillStyle = '#1f1f21';
+          roundRect(ctx, 0, 0, c.width, c.height, 12);
+          ctx.fill();
+          ctx.restore();
+        },
+      }],
+    });
+
+    chartCanvas._chartInstance = instance;
+
+    // Chart.js renders synchronously with animation:false, but use rAF to be safe
+    requestAnimationFrame(() => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = chartCanvas.toDataURL('image/png');
+    });
+  });
+}
+
+function generateOrganizeImage(data, chartImage) {
   const canvas = document.getElementById('organizeCanvas');
   const ctx = canvas.getContext('2d');
 
@@ -144,8 +240,6 @@ function generateOrganizeImage(data) {
     bg: '#1f1f21',
     text: '#f3f1e8',
     accent: '#33e5b0',
-    muted: '#8a8a8e',
-    cardBg: '#2a2a2d',
   };
 
   const PAD = 40;
@@ -153,16 +247,16 @@ function generateOrganizeImage(data) {
   const LINE_HEIGHT = 26;
   const SECTION_GAP = 20;
   const BULLET_INDENT = 24;
-
-  // Measure height first
   const TITLE_FONT = 'bold 24px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   const TITLE_LINE_HEIGHT = 34;
+
+  // Measure height
   ctx.font = TITLE_FONT;
   const titleLines = wrapText(ctx, data.title, WIDTH - PAD * 2, TITLE_FONT);
-  let totalHeight = PAD + (titleLines.length * TITLE_LINE_HEIGHT) + 16; // top pad + title lines + gap
+  let totalHeight = PAD + (titleLines.length * TITLE_LINE_HEIGHT) + 16;
 
   (data.sections || []).forEach(s => {
-    totalHeight += SECTION_GAP + 22 + 8; // gap + heading + gap
+    totalHeight += SECTION_GAP + 22 + 8;
     (s.points || []).forEach(p => {
       const lines = wrapText(ctx, p, WIDTH - PAD * 2 - BULLET_INDENT, '15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
       totalHeight += lines.length * LINE_HEIGHT;
@@ -176,7 +270,14 @@ function generateOrganizeImage(data) {
     totalHeight += cLines.length * LINE_HEIGHT;
   }
 
-  totalHeight += PAD; // bottom pad
+  // Add chart space
+  const CHART_W = WIDTH - PAD * 2;
+  const CHART_H = 360;
+  if (chartImage) {
+    totalHeight += SECTION_GAP + 12 + CHART_H;
+  }
+
+  totalHeight += PAD;
 
   // Set canvas size
   canvas.width = WIDTH;
@@ -187,7 +288,7 @@ function generateOrganizeImage(data) {
   roundRect(ctx, 0, 0, WIDTH, totalHeight, 16);
   ctx.fill();
 
-  // Subtle border
+  // Border
   ctx.strokeStyle = 'rgba(51, 229, 176, 0.15)';
   ctx.lineWidth = 1;
   roundRect(ctx, 0.5, 0.5, WIDTH - 1, totalHeight - 1, 16);
@@ -195,7 +296,7 @@ function generateOrganizeImage(data) {
 
   let y = PAD;
 
-  // Title (with word wrap)
+  // Title
   ctx.fillStyle = COLORS.accent;
   ctx.font = TITLE_FONT;
   titleLines.forEach((line, i) => {
@@ -203,7 +304,7 @@ function generateOrganizeImage(data) {
   });
   y += titleLines.length * TITLE_LINE_HEIGHT;
 
-  // Divider line
+  // Divider
   y += 8;
   ctx.strokeStyle = 'rgba(51, 229, 176, 0.2)';
   ctx.lineWidth = 1;
@@ -217,23 +318,19 @@ function generateOrganizeImage(data) {
   (data.sections || []).forEach(s => {
     y += SECTION_GAP;
 
-    // Section heading
     ctx.fillStyle = COLORS.accent;
     ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     ctx.fillText(s.heading, PAD, y + 17);
     y += 22 + 8;
 
-    // Points
     ctx.fillStyle = COLORS.text;
     ctx.font = '15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     (s.points || []).forEach(p => {
-      // Bullet dot
       ctx.fillStyle = COLORS.accent;
       ctx.beginPath();
       ctx.arc(PAD + 6, y + LINE_HEIGHT / 2, 3, 0, Math.PI * 2);
       ctx.fill();
 
-      // Text
       ctx.fillStyle = COLORS.text;
       const lines = wrapText(ctx, p, WIDTH - PAD * 2 - BULLET_INDENT, '15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
       lines.forEach((line, i) => {
@@ -246,8 +343,6 @@ function generateOrganizeImage(data) {
   // Conclusion
   if (data.conclusion) {
     y += SECTION_GAP;
-
-    // Divider
     ctx.strokeStyle = 'rgba(51, 229, 176, 0.2)';
     ctx.beginPath();
     ctx.moveTo(PAD, y);
@@ -266,6 +361,22 @@ function generateOrganizeImage(data) {
     cLines.forEach((line, i) => {
       ctx.fillText(line, PAD, y + LINE_HEIGHT * (i + 1) - 6);
     });
+    y += cLines.length * LINE_HEIGHT;
+  }
+
+  // Chart
+  if (chartImage) {
+    y += SECTION_GAP;
+
+    // Divider before chart
+    ctx.strokeStyle = 'rgba(51, 229, 176, 0.2)';
+    ctx.beginPath();
+    ctx.moveTo(PAD, y);
+    ctx.lineTo(WIDTH - PAD, y);
+    ctx.stroke();
+    y += 12;
+
+    ctx.drawImage(chartImage, PAD, y, CHART_W, CHART_H);
   }
 
   // Set preview image
