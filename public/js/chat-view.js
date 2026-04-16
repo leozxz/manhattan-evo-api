@@ -423,7 +423,7 @@ async function fetchAndRenderMessages() {
       // Dropdown arrow (WhatsApp Web style) — must be after innerHTML
       const arrow = document.createElement('button');
       arrow.className = 'msg-dropdown-arrow';
-      arrow.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18"><path d="M3.15 5.4L9 11.25l5.85-5.85L16.5 7.05 9 14.55l-7.5-7.5z" fill="currentColor"/></svg>';
+      arrow.innerHTML = '<svg width="14" height="14" viewBox="0 0 18 18"><path d="M3.15 5.4L9 11.25l5.85-5.85L16.5 7.05 9 14.55l-7.5-7.5z" fill="currentColor"/></svg>';
       arrow.addEventListener('click', (e) => {
         e.stopPropagation();
         showMsgContextMenu(wrapper, m, key, arrow);
