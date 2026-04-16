@@ -28,9 +28,8 @@ const { isRateLimited } = require('./middleware/rateLimit');
 
 // Routes
 const { handleWebhook } = require('./routes/webhook');
-const { handleAiSuggest, handleAiGraphQuery, handleAiSearch, handleAiOrganize } = require('./routes/ai');
+const { handleAiSuggest, handleAiSearch, handleAiOrganize } = require('./routes/ai');
 const { serveStatic } = require('./routes/static');
-const knowledge = require('./knowledge');
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
@@ -122,9 +121,7 @@ http.createServer((req, res) => {
   else console.log('WARNING: No PANEL_PASS set, auth disabled. Set PANEL_PASS in .env for production.');
   if (redis.isAvailable()) console.log('Redis connected');
   else console.log('Redis not available, using in-memory fallback');
-  knowledge.init()
-    .then(() => seedAdmin())
-    .catch(err => console.error('[Knowledge] Init error:', err.message));
+  seedAdmin();
 });
 
 async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
@@ -309,16 +306,6 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
     return handleAiSuggest(req, res, SECURITY_HEADERS);
   }
 
-  // AI graph query
-  if (req.method === 'POST' && urlPath === '/ai/graph-query') {
-    if (await isRateLimited(ip)) {
-      res.writeHead(429, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
-      res.end(JSON.stringify({ error: 'Too many requests' }));
-      return;
-    }
-    return handleAiGraphQuery(req, res, SECURITY_HEADERS);
-  }
-
   // AI search across conversations
   if (req.method === 'POST' && urlPath === '/ai/search') {
     if (await isRateLimited(ip)) {
@@ -337,16 +324,6 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
       return;
     }
     return handleAiOrganize(req, res, SECURITY_HEADERS);
-  }
-
-  // Knowledge graph
-  if (urlPath.startsWith('/knowledge/')) {
-    if (await isRateLimited(ip)) {
-      res.writeHead(429, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
-      res.end(JSON.stringify({ error: 'Too many requests' }));
-      return;
-    }
-    return knowledge.handleRequest(req, res, urlPath, fullApiPath);
   }
 
   // Proxy to Evolution API
