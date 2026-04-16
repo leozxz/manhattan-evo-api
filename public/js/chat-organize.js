@@ -82,7 +82,9 @@ async function runOrganize() {
   const btn = document.getElementById('organizeBtn');
   organizeLoading = true;
   btn.disabled = true;
-  btn.innerHTML = '<div class="ai-spinner"></div> Organizando...';
+  btn.dataset.original = btn.innerHTML;
+  btn.innerHTML = '<div class="ai-spinner"></div>';
+  btn.style.minWidth = btn.offsetWidth + 'px';
 
   try {
     const res = await fetch('/ai/organize', {
@@ -103,7 +105,8 @@ async function runOrganize() {
   } finally {
     organizeLoading = false;
     btn.disabled = false;
-    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2zm8 6l-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3z"/></svg> Organizar';
+    btn.innerHTML = btn.dataset.original || '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2L8.6 6.6 4 8l4.6 1.4L10 14l1.4-4.6L16 8l-4.6-1.4L10 2zm8 6l-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3z"/></svg> Organizar';
+    btn.style.minWidth = '';
   }
 }
 
@@ -152,8 +155,11 @@ function generateOrganizeImage(data) {
   const BULLET_INDENT = 24;
 
   // Measure height first
-  ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  let totalHeight = PAD + 36 + 16; // top pad + title + gap
+  const TITLE_FONT = 'bold 24px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  const TITLE_LINE_HEIGHT = 34;
+  ctx.font = TITLE_FONT;
+  const titleLines = wrapText(ctx, data.title, WIDTH - PAD * 2, TITLE_FONT);
+  let totalHeight = PAD + (titleLines.length * TITLE_LINE_HEIGHT) + 16; // top pad + title lines + gap
 
   (data.sections || []).forEach(s => {
     totalHeight += SECTION_GAP + 22 + 8; // gap + heading + gap
@@ -189,11 +195,13 @@ function generateOrganizeImage(data) {
 
   let y = PAD;
 
-  // Title
+  // Title (with word wrap)
   ctx.fillStyle = COLORS.accent;
-  ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  ctx.fillText(data.title, PAD, y + 24);
-  y += 36;
+  ctx.font = TITLE_FONT;
+  titleLines.forEach((line, i) => {
+    ctx.fillText(line, PAD, y + 24 + i * TITLE_LINE_HEIGHT);
+  });
+  y += titleLines.length * TITLE_LINE_HEIGHT;
 
   // Divider line
   y += 8;
