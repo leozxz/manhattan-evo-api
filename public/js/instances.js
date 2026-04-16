@@ -14,13 +14,26 @@ function renderInstances() {
     const stLabel = inst.state === 'open' ? 'Conectado' : inst.state === 'connecting' ? 'Aguardando QR' : 'Desconectado';
     const isActive = inst.name === currentInstance;
     const isAdmin = role === 'admin';
+    const isConnected = inst.state === 'open';
 
     const card = document.createElement('div');
-    card.className = 'ic' + (isActive ? ' ic-active' : '');
+    card.className = 'ic' + (isActive ? ' ic-active' : '') + (isConnected ? ' ic-clickable' : '');
 
-    // ── Top row: name (left) + ribbons stacked (right) ──
+    // Click card to select as active (only if connected)
+    if (isConnected) {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.ic-actions') || e.target.closest('.ic-seg') || e.target.closest('.ic-name')) return;
+        useInstance(inst.name);
+      });
+    }
+
+    // ── Top row: status dot + name + role tag ──
     const topRow = document.createElement('div');
     topRow.className = 'ic-top';
+
+    const statusDot = document.createElement('span');
+    statusDot.className = 'ic-status-dot ic-dot-' + stClass;
+    statusDot.title = stLabel;
 
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
@@ -33,23 +46,29 @@ function renderInstances() {
     nameInput.onblur = function() { this.setAttribute('readonly', ''); };
     nameInput.onchange = function() { updateInstanceField(this); };
 
-    const ribbons = document.createElement('div');
-    ribbons.className = 'ic-ribbons';
-    ribbons.innerHTML =
-      '<span class="ic-ribbon ic-ribbon-' + stClass + '">' + stLabel + '</span>' +
-      (isAdmin ? '<span class="ic-ribbon ic-ribbon-role-admin">Admin</span>' : '<span class="ic-ribbon ic-ribbon-role-conv">Conv</span>') +
-      (isActive ? '<span class="ic-ribbon ic-ribbon-active">Em uso</span>' : '');
+    const roleTag = document.createElement('span');
+    roleTag.className = 'ic-role-tag ic-role-' + (isAdmin ? 'admin' : 'conv');
+    roleTag.textContent = isAdmin ? 'Admin' : 'Conv';
 
+    topRow.appendChild(statusDot);
     topRow.appendChild(nameInput);
-    topRow.appendChild(ribbons);
+    topRow.appendChild(roleTag);
+
+    // ── Active indicator ──
+    if (isActive) {
+      const activeTag = document.createElement('div');
+      activeTag.className = 'ic-active-label';
+      activeTag.textContent = 'Em uso';
+      topRow.appendChild(activeTag);
+    }
 
     // ── Card body (QR / checkmark) ──
     const body = document.createElement('div');
     body.className = 'ic-body';
     body.id = 'card-body-' + safeName;
 
-    if (inst.state === 'open') {
-      body.innerHTML = '<div style="text-align:center;color:#25d366;padding:8px 0"><svg width="40" height="40" viewBox="0 0 24 24" fill="#25d366"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>';
+    if (isConnected) {
+      body.innerHTML = '<div class="ic-connected-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>';
     } else {
       body.innerHTML = '<div class="qr-container" id="qr-' + safeName + '"><span class="qr-placeholder">Clique "Conectar" para gerar QR Code</span></div>';
     }
@@ -65,13 +84,12 @@ function renderInstances() {
       </div>
     `;
 
-    // ── Actions ──
+    // ── Actions (minimal) ──
     const actions = document.createElement('div');
     actions.className = 'ic-actions';
 
-    if (inst.state === 'open') {
+    if (isConnected) {
       actions.innerHTML = `
-        <button class="btn btn-primary btn-sm" onclick="useInstance('${inst.name}')">Usar esta</button>
         <button class="btn btn-danger btn-sm" onclick="logoutInstance('${inst.name}')">Desconectar</button>
       `;
     } else {
