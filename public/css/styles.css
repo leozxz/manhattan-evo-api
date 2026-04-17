@@ -2140,8 +2140,8 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 }
 .tarefas-chip-menu.show { display: block; }
 .tarefas-chip-option {
-  display: flex; align-items: center; gap: 8px; padding: 8px 14px;
-  font-size: 13px; color: var(--text); cursor: pointer;
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+  font-size: 11px; color: var(--text); cursor: pointer;
   transition: background 0.15s;
 }
 .tarefas-chip-option:hover { background: var(--panel-alt); }
