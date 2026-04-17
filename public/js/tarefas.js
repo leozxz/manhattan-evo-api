@@ -4,6 +4,7 @@
 let tarefasLoading = false;
 let tarefasData = [];
 let tarefasFilter = 'todas';
+let tarefasInstanceFilter = []; // empty = all instances
 
 async function loadTarefasPage() {
   const el = document.getElementById('tarefasContent');
@@ -29,13 +30,21 @@ function renderTarefasPage() {
   const el = document.getElementById('tarefasContent');
   if (!el) return;
 
-  // Count by priority
-  const counts = { todas: tarefasData.length, alta: 0, media: 0, baixa: 0 };
-  tarefasData.forEach(t => { if (counts[t.priority] !== undefined) counts[t.priority]++; });
+  // Apply instance filter first
+  const instanceFiltered = tarefasInstanceFilter.length === 0
+    ? tarefasData
+    : tarefasData.filter(t => tarefasInstanceFilter.includes(t.instanceName || ''));
+
+  // Count by priority (based on instance-filtered data)
+  const counts = { todas: instanceFiltered.length, alta: 0, media: 0, baixa: 0 };
+  instanceFiltered.forEach(t => { if (counts[t.priority] !== undefined) counts[t.priority]++; });
 
   const filtered = tarefasFilter === 'todas'
-    ? tarefasData
-    : tarefasData.filter(t => t.priority === tarefasFilter);
+    ? instanceFiltered
+    : instanceFiltered.filter(t => t.priority === tarefasFilter);
+
+  // Collect unique instance names from all data
+  const instanceNames = [...new Set(tarefasData.map(t => t.instanceName || '').filter(Boolean))];
 
   let html = '<div class="tarefas-page">';
 
@@ -49,6 +58,21 @@ function renderTarefasPage() {
   html += '</div>';
   html += '<button class="btn btn-secondary btn-sm" onclick="loadTarefasPage()" title="Atualizar"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>';
   html += '</div>';
+
+  // Instance filter row
+  if (instanceNames.length > 1) {
+    html += '<div class="tarefas-instance-filters">';
+    html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.5;flex-shrink:0"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>';
+    const allActive = tarefasInstanceFilter.length === 0;
+    html += '<button class="tarefas-instance-pill' + (allActive ? ' active' : '') + '" onclick="toggleInstanceFilter(\'__all__\')">Todos</button>';
+    instanceNames.forEach(name => {
+      const isActive = tarefasInstanceFilter.includes(name);
+      const count = tarefasData.filter(t => t.instanceName === name).length;
+      html += '<button class="tarefas-instance-pill' + (isActive ? ' active' : '') + '" onclick="toggleInstanceFilter(\'' + escapeAttr(name) + '\')">' +
+        escapeHtml(name) + '<span class="tarefas-pill-count">' + count + '</span></button>';
+    });
+    html += '</div>';
+  }
 
   if (filtered.length === 0) {
     html += '<div class="tarefas-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><p>Nenhuma tarefa ' + (tarefasFilter === 'todas' ? 'pendente' : 'com prioridade ' + tarefasFilter) + '</p></div>';
@@ -114,6 +138,20 @@ function renderTarefaCard(task) {
 
 function setTarefasFilter(filter) {
   tarefasFilter = filter;
+  renderTarefasPage();
+}
+
+function toggleInstanceFilter(name) {
+  if (name === '__all__') {
+    tarefasInstanceFilter = [];
+  } else {
+    const idx = tarefasInstanceFilter.indexOf(name);
+    if (idx >= 0) {
+      tarefasInstanceFilter.splice(idx, 1);
+    } else {
+      tarefasInstanceFilter.push(name);
+    }
+  }
   renderTarefasPage();
 }
 

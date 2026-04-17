@@ -2126,6 +2126,22 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
   font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px;
   text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; white-space: nowrap;
 }
+.tarefas-instance-filters {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.tarefas-instance-pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 16px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text-secondary);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: all 0.2s; font-family: var(--font);
+}
+.tarefas-instance-pill:hover { border-color: var(--accent); color: var(--text); }
+.tarefas-instance-pill.active {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+.tarefas-instance-pill.active .tarefas-pill-count { background: rgba(255,255,255,0.25); }
 .tarefa-owner {
   display: flex; align-items: center; gap: 5px;
   font-size: 11px; color: var(--accent); font-weight: 600;
