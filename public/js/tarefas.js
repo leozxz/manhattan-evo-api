@@ -90,7 +90,9 @@ function renderTarefaCard(task) {
   const dueDate = task.dueDate ? formatDueDate(task.dueDate) : '';
   const isNew = task.status === 'nova';
 
-  return '<div class="tarefa-card">' +
+  const jid = task.remoteJid || '';
+
+  return '<div class="tarefa-card" onclick="openTarefaChat(\'' + escapeAttr(jid) + '\')" style="cursor:pointer" title="Abrir conversa">' +
     '<div class="tarefa-priority-bar" style="background:' + color + '"></div>' +
     '<div class="tarefa-body">' +
       '<div class="tarefa-top">' +
@@ -102,11 +104,11 @@ function renderTarefaCard(task) {
         (created ? '<span class="tarefa-date"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg> ' + created + '</span>' : '') +
         (dueDate ? '<span class="tarefa-due">' + dueDate + '</span>' : '') +
       '</div>' +
-      (isNew ? '<div class="tarefa-new-actions"><button class="btn btn-primary btn-sm" onclick="tarefaAccept(\'' + task.id + '\')">Aceitar</button><button class="btn btn-secondary btn-sm" onclick="tarefaReject(\'' + task.id + '\')">Recusar</button></div>' : '') +
+      (isNew ? '<div class="tarefa-new-actions"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();tarefaAccept(\'' + task.id + '\')">Aceitar</button><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();tarefaReject(\'' + task.id + '\')">Recusar</button></div>' : '') +
     '</div>' +
     '<div class="tarefa-actions">' +
-      '<button class="tarefa-done-btn" onclick="tarefaDone(\'' + task.id + '\')" title="Concluir"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></button>' +
-      '<button class="tarefa-dismiss-btn" onclick="tarefaReject(\'' + task.id + '\')" title="Remover"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>' +
+      '<button class="tarefa-done-btn" onclick="event.stopPropagation();tarefaDone(\'' + task.id + '\')" title="Concluir"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></button>' +
+      '<button class="tarefa-dismiss-btn" onclick="event.stopPropagation();tarefaReject(\'' + task.id + '\')" title="Remover"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>' +
     '</div>' +
   '</div>';
 }
@@ -166,6 +168,30 @@ function timeAgo(date) {
   if (diff < 86400) return Math.floor(diff / 3600) + 'h';
   if (diff < 604800) return Math.floor(diff / 86400) + 'd';
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+}
+
+function openTarefaChat(jid) {
+  if (!jid) return toast('Contato sem JID', 'error');
+  const phone = jid.split('@')[0];
+  let chat = allChats.find(c => c.id === jid || c.phone === phone);
+  if (!chat) {
+    chat = {
+      id: jid,
+      messageJid: jid,
+      isGroup: false,
+      subject: '',
+      pushName: '',
+      phone: phone,
+      size: 0,
+      profilePicUrl: null,
+      lastMessageTs: 0,
+      unreadCount: 0
+    };
+    allChats.push(chat);
+    renderGroupList();
+  }
+  showPage('chat');
+  setTimeout(() => { selectGroup(chat, null); }, 100);
 }
 
 function formatDueDate(dateStr) {
