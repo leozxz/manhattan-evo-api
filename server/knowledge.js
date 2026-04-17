@@ -147,6 +147,16 @@ async function initTables() {
       "updatedAt" TIMESTAMP DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS "QuickMessage" (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "userId" TEXT NOT NULL REFERENCES "PanelUser"(id) ON DELETE CASCADE,
+      title VARCHAR(100) NOT NULL,
+      body TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      "createdAt" TIMESTAMP DEFAULT NOW(),
+      "updatedAt" TIMESTAMP DEFAULT NOW()
+    );
+
     -- Add email/phone columns if table already exists
     DO $$ BEGIN
       ALTER TABLE "PanelUser" ADD COLUMN IF NOT EXISTS email VARCHAR(255);

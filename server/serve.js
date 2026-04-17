@@ -329,6 +329,136 @@ async function handleAuthenticated(req, res, ip, urlPath, fullApiPath) {
     return handleAiOrganize(req, res, SECURITY_HEADERS);
   }
 
+  // Quick messages CRUD
+  if (urlPath === '/api/quick-messages' || urlPath.startsWith('/api/quick-messages/')) {
+    const db = getPool();
+    if (!db) {
+      res.writeHead(503, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: 'Database not configured' }));
+      return;
+    }
+    const userId = req.user.userId;
+
+    // GET /api/quick-messages
+    if (req.method === 'GET' && urlPath === '/api/quick-messages') {
+      try {
+        const result = await db.query(
+          'SELECT id, title, body, position FROM "QuickMessage" WHERE "userId" = $1 ORDER BY position ASC, "createdAt" ASC',
+          [userId]
+        );
+        res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify(result.rows));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    // POST /api/quick-messages
+    if (req.method === 'POST' && urlPath === '/api/quick-messages') {
+      let body = '';
+      req.on('data', c => { if (body.length < 4096) body += c; });
+      req.on('end', async () => {
+        try {
+          const { title, body: msgBody } = JSON.parse(body);
+          if (!title || !msgBody) {
+            res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+            res.end(JSON.stringify({ error: 'title and body required' }));
+            return;
+          }
+          const countResult = await db.query(
+            'SELECT COUNT(*)::int AS count FROM "QuickMessage" WHERE "userId" = $1',
+            [userId]
+          );
+          if (countResult.rows[0].count >= 5) {
+            res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+            res.end(JSON.stringify({ error: 'Limite de 5 mensagens rapidas atingido' }));
+            return;
+          }
+          const result = await db.query(
+            `INSERT INTO "QuickMessage" ("userId", title, body, position)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id, title, body, position`,
+            [userId, title.substring(0, 100), msgBody, countResult.rows[0].count]
+          );
+          res.writeHead(201, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+          res.end(JSON.stringify(result.rows[0]));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+
+    const idMatch = urlPath.match(/^\/api\/quick-messages\/([^/]+)$/);
+    if (!idMatch) {
+      res.writeHead(404, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end(JSON.stringify({ error: 'Not found' }));
+      return;
+    }
+    const msgId = idMatch[1];
+
+    // PUT /api/quick-messages/:id
+    if (req.method === 'PUT') {
+      let body = '';
+      req.on('data', c => { if (body.length < 4096) body += c; });
+      req.on('end', async () => {
+        try {
+          const { title, body: msgBody } = JSON.parse(body);
+          if (!title || !msgBody) {
+            res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+            res.end(JSON.stringify({ error: 'title and body required' }));
+            return;
+          }
+          const result = await db.query(
+            `UPDATE "QuickMessage" SET title = $1, body = $2, "updatedAt" = NOW()
+             WHERE id = $3 AND "userId" = $4
+             RETURNING id, title, body, position`,
+            [title.substring(0, 100), msgBody, msgId, userId]
+          );
+          if (result.rows.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+            res.end(JSON.stringify({ error: 'Not found' }));
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+          res.end(JSON.stringify(result.rows[0]));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+
+    // DELETE /api/quick-messages/:id
+    if (req.method === 'DELETE') {
+      try {
+        const result = await db.query(
+          'DELETE FROM "QuickMessage" WHERE id = $1 AND "userId" = $2 RETURNING id',
+          [msgId, userId]
+        );
+        if (result.rows.length === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+          res.end(JSON.stringify({ error: 'Not found' }));
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    res.writeHead(405, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+    res.end(JSON.stringify({ error: 'Method not allowed' }));
+    return;
+  }
+
   // Knowledge graph
   if (urlPath.startsWith('/knowledge/')) {
     if (await isRateLimited(ip)) {

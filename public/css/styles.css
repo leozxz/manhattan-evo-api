@@ -1572,6 +1572,39 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
 .modal-box h3 { font-size: 16px; font-weight: 700; margin-bottom: 20px; }
 .modal-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
 
+/* Quick Messages */
+.quick-msg-modal { min-width: 380px; max-width: 440px; }
+.quick-msg-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.quick-msg-header h3 { font-size: 16px; font-weight: 700; margin: 0; }
+.quick-msg-list { max-height: 380px; overflow-y: auto; }
+.quick-msg-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.quick-msg-item:last-child { border-bottom: none; }
+.quick-msg-info { flex: 1; min-width: 0; cursor: pointer; padding: 4px; border-radius: var(--radius); transition: background 0.15s; }
+.quick-msg-info:hover { background: var(--panel-alt); }
+.quick-msg-title { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.quick-msg-preview { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.quick-msg-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.quick-msg-actions button {
+  background: none; border: none; cursor: pointer; padding: 5px;
+  color: var(--text-secondary); border-radius: 4px; transition: background 0.15s, color 0.15s;
+}
+.quick-msg-actions button:hover { background: var(--panel-alt); color: var(--text); }
+.quick-msg-form { padding: 10px 0; }
+.quick-msg-form input, .quick-msg-form textarea {
+  width: 100%; padding: 8px 10px; border-radius: var(--radius);
+  border: 1px solid var(--border-light); background: var(--bg);
+  color: var(--text); font-size: 13px; margin-bottom: 8px;
+  font-family: inherit; resize: vertical;
+}
+.quick-msg-form input:focus, .quick-msg-form textarea:focus { border-color: var(--accent); outline: none; }
+.quick-msg-empty { text-align: center; padding: 28px 0; color: var(--text-secondary); font-size: 13px; }
+.quick-msg-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; margin-top: 4px; }
+.quick-msg-count { font-size: 12px; color: var(--text-secondary); }
+@media (max-width: 600px) { .quick-msg-modal { min-width: unset; width: 95%; } }
+
 /* AI Suggest button */
 .ai-suggest-btn { position: relative; overflow: hidden; }
 .ai-suggest-btn svg { position: relative; z-index: 1; }
