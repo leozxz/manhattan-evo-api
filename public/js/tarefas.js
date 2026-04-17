@@ -9,18 +9,13 @@ async function loadTarefasPage() {
   const el = document.getElementById('tarefasContent');
   if (!el) return;
 
-  if (!currentInstance) {
-    el.innerHTML = '<div class="tarefas-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg><p>Conecte uma instancia para ver as tarefas</p></div>';
-    return;
-  }
-
   if (tarefasLoading) return;
   tarefasLoading = true;
 
   el.innerHTML = '<div class="tarefas-empty"><div class="spinner"></div><p>Carregando tarefas...</p></div>';
 
   try {
-    const res = await api('GET', '/knowledge/tasks/' + currentInstance);
+    const res = await api('GET', '/knowledge/tasks-all');
     tarefasData = res.ok && Array.isArray(res.data) ? res.data : [];
     renderTarefasPage();
   } catch {
@@ -91,14 +86,18 @@ function renderTarefaCard(task) {
   const isNew = task.status === 'nova';
 
   const jid = task.remoteJid || '';
+  const ownerName = task.instanceName || '';
+  const ownerNumber = task.instanceNumber || '';
+  const ownerLabel = ownerName || ownerNumber || '';
 
-  return '<div class="tarefa-card" onclick="openTarefaChat(\'' + escapeAttr(jid) + '\')" style="cursor:pointer" title="Abrir conversa">' +
+  return '<div class="tarefa-card" onclick="openTarefaChat(\'' + escapeAttr(jid) + '\',\'' + escapeAttr(ownerName) + '\')" style="cursor:pointer" title="Abrir conversa">' +
     '<div class="tarefa-priority-bar" style="background:' + color + '"></div>' +
     '<div class="tarefa-body">' +
       '<div class="tarefa-top">' +
         '<div class="tarefa-title">' + escapeHtml(task.title) + '</div>' +
         '<span class="tarefa-priority-badge" style="background:' + color + '15;color:' + color + '">' + (priorityLabels[task.priority] || task.priority) + '</span>' +
       '</div>' +
+      (ownerLabel ? '<div class="tarefa-owner"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg> ' + escapeHtml(ownerLabel) + '</div>' : '') +
       '<div class="tarefa-meta">' +
         '<span class="tarefa-contact" title="' + escapeHtml(phone) + '"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg> ' + escapeHtml(displayName) + '</span>' +
         (created ? '<span class="tarefa-date"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg> ' + created + '</span>' : '') +
@@ -118,9 +117,14 @@ function setTarefasFilter(filter) {
   renderTarefasPage();
 }
 
+function getTaskInstance(taskId) {
+  const task = tarefasData.find(t => t.id === taskId);
+  return (task && task.instanceName) || currentInstance;
+}
+
 async function tarefaDone(taskId) {
   try {
-    await api('PUT', '/knowledge/task/' + currentInstance, { taskId, status: 'concluida' });
+    await api('PUT', '/knowledge/task/' + getTaskInstance(taskId), { taskId, status: 'concluida' });
     tarefasData = tarefasData.filter(t => t.id !== taskId);
     const card = document.querySelector('.tarefa-card [onclick*="' + taskId + '"]')?.closest('.tarefa-card');
     if (card) {
@@ -137,7 +141,7 @@ async function tarefaDone(taskId) {
 
 async function tarefaAccept(taskId) {
   try {
-    await api('PUT', '/knowledge/task/' + currentInstance, { taskId, status: 'aceita' });
+    await api('PUT', '/knowledge/task/' + getTaskInstance(taskId), { taskId, status: 'aceita' });
     const task = tarefasData.find(t => t.id === taskId);
     if (task) task.status = 'aceita';
     renderTarefasPage();
@@ -146,7 +150,7 @@ async function tarefaAccept(taskId) {
 
 async function tarefaReject(taskId) {
   try {
-    await api('PUT', '/knowledge/task/' + currentInstance, { taskId, status: 'recusada' });
+    await api('PUT', '/knowledge/task/' + getTaskInstance(taskId), { taskId, status: 'recusada' });
     tarefasData = tarefasData.filter(t => t.id !== taskId);
     const card = document.querySelector('.tarefa-card [onclick*="' + taskId + '"]')?.closest('.tarefa-card');
     if (card) {
@@ -170,28 +174,51 @@ function timeAgo(date) {
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 }
 
-function openTarefaChat(jid) {
+function openTarefaChat(jid, instanceName) {
   if (!jid) return toast('Contato sem JID', 'error');
-  const phone = jid.split('@')[0];
-  let chat = allChats.find(c => c.id === jid || c.phone === phone);
-  if (!chat) {
-    chat = {
-      id: jid,
-      messageJid: jid,
-      isGroup: false,
-      subject: '',
-      pushName: '',
-      phone: phone,
-      size: 0,
-      profilePicUrl: null,
-      lastMessageTs: 0,
-      unreadCount: 0
-    };
-    allChats.push(chat);
-    renderGroupList();
+
+  // Switch instance if needed
+  if (instanceName && instanceName !== currentInstance) {
+    const inst = instances.find(i => i.name === instanceName);
+    if (inst && inst.state === 'open') {
+      currentInstance = instanceName;
+      renderInstances();
+      // Reload chats for the new instance
+      allChats = [];
+      loadContacts();
+      loadGroups();
+    }
   }
-  showPage('chat');
-  setTimeout(() => { selectGroup(chat, null); }, 100);
+
+  const phone = jid.split('@')[0];
+  // Small delay to let chats load if instance switched
+  const openChat = () => {
+    let chat = allChats.find(c => c.id === jid || c.phone === phone);
+    if (!chat) {
+      chat = {
+        id: jid,
+        messageJid: jid,
+        isGroup: false,
+        subject: '',
+        pushName: '',
+        phone: phone,
+        size: 0,
+        profilePicUrl: null,
+        lastMessageTs: 0,
+        unreadCount: 0
+      };
+      allChats.push(chat);
+      renderGroupList();
+    }
+    showPage('chat');
+    setTimeout(() => { selectGroup(chat, null); }, 100);
+  };
+
+  if (instanceName && instanceName !== currentInstance) {
+    setTimeout(openChat, 500);
+  } else {
+    openChat();
+  }
 }
 
 function formatDueDate(dateStr) {

@@ -686,15 +686,33 @@ async function getContactTasks(instanceId, remoteJid) {
 async function getAllTasks(instanceId) {
   const db = getPool();
   const result = await db.query(`
-    SELECT ct.*, ck."remoteJid", ck."pushName", ck."savedName"
+    SELECT ct.*, ck."remoteJid", ck."pushName", ck."savedName",
+           i."name" AS "instanceName", i."number" AS "instanceNumber"
     FROM "ContactTask" ct
     JOIN "ContactKnowledge" ck ON ct."contactKnowledgeId" = ck.id
+    LEFT JOIN "Instance" i ON ck."instanceId" = i.id
     WHERE ck."instanceId" = $1
       AND ct.status NOT IN ('recusada', 'concluida')
     ORDER BY
       CASE ct.priority WHEN 'alta' THEN 0 WHEN 'media' THEN 1 WHEN 'baixa' THEN 2 ELSE 3 END,
       ct."createdAt" DESC
   `, [instanceId]);
+  return result.rows;
+}
+
+async function getAllTasksAllInstances() {
+  const db = getPool();
+  const result = await db.query(`
+    SELECT ct.*, ck."remoteJid", ck."pushName", ck."savedName",
+           i."name" AS "instanceName", i."number" AS "instanceNumber"
+    FROM "ContactTask" ct
+    JOIN "ContactKnowledge" ck ON ct."contactKnowledgeId" = ck.id
+    LEFT JOIN "Instance" i ON ck."instanceId" = i.id
+    WHERE ct.status NOT IN ('recusada', 'concluida')
+    ORDER BY
+      CASE ct.priority WHEN 'alta' THEN 0 WHEN 'media' THEN 1 WHEN 'baixa' THEN 2 ELSE 3 END,
+      ct."createdAt" DESC
+  `);
   return result.rows;
 }
 
@@ -795,6 +813,12 @@ async function handleRequest(req, res, urlPath, fullApiPath) {
     const parts = urlPath.replace(/^\/knowledge\//, '').split('/');
     const action = parts[0];
     const instanceName = decodeURIComponent(parts[1] || '');
+
+    // GET /knowledge/tasks-all — all tasks across all instances
+    if (req.method === 'GET' && action === 'tasks-all') {
+      const tasks = await getAllTasksAllInstances();
+      return json(200, tasks);
+    }
 
     if (!instanceName) return json(400, { error: 'instanceName is required' });
 
