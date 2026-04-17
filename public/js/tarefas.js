@@ -56,23 +56,36 @@ function renderTarefasPage() {
   html += renderStatPill('media', counts.media, '#f59e0b');
   html += renderStatPill('baixa', counts.baixa, '#3b82f6');
   html += '</div>';
-  html += '<button class="btn btn-secondary btn-sm" onclick="loadTarefasPage()" title="Atualizar"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>';
-  html += '</div>';
-
-  // Instance filter row
+  html += '<div class="tarefas-header-actions">';
   if (instanceNames.length > 1) {
-    html += '<div class="tarefas-instance-filters">';
-    html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.5;flex-shrink:0"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>';
+    const filterLabel = tarefasInstanceFilter.length === 0
+      ? 'Todos'
+      : tarefasInstanceFilter.length === 1
+        ? tarefasInstanceFilter[0]
+        : tarefasInstanceFilter.length + ' chips';
+    const hasFilter = tarefasInstanceFilter.length > 0;
+    html += '<div class="tarefas-instance-dropdown" id="tarefasInstanceDropdown">';
+    html += '<button class="btn btn-secondary btn-sm tarefas-chip-btn' + (hasFilter ? ' active' : '') + '" onclick="toggleInstanceDropdown()" title="Filtrar por chip">';
+    html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>';
+    html += '<span>' + escapeHtml(filterLabel) + '</span>';
+    html += '<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>';
+    html += '</button>';
+    html += '<div class="tarefas-chip-menu" id="tarefasChipMenu">';
     const allActive = tarefasInstanceFilter.length === 0;
-    html += '<button class="tarefas-instance-pill' + (allActive ? ' active' : '') + '" onclick="toggleInstanceFilter(\'__all__\')">Todos</button>';
+    html += '<label class="tarefas-chip-option' + (allActive ? ' active' : '') + '" onclick="toggleInstanceFilter(\'__all__\')">';
+    html += '<span class="tarefas-chip-check">' + (allActive ? '&#10003;' : '') + '</span>Todos os chips</label>';
     instanceNames.forEach(name => {
       const isActive = tarefasInstanceFilter.includes(name);
       const count = tarefasData.filter(t => t.instanceName === name).length;
-      html += '<button class="tarefas-instance-pill' + (isActive ? ' active' : '') + '" onclick="toggleInstanceFilter(\'' + escapeAttr(name) + '\')">' +
-        escapeHtml(name) + '<span class="tarefas-pill-count">' + count + '</span></button>';
+      html += '<label class="tarefas-chip-option' + (isActive ? ' active' : '') + '" onclick="toggleInstanceFilter(\'' + escapeAttr(name) + '\')">';
+      html += '<span class="tarefas-chip-check">' + (isActive ? '&#10003;' : '') + '</span>';
+      html += escapeHtml(name) + '<span class="tarefas-chip-count">' + count + '</span></label>';
     });
-    html += '</div>';
+    html += '</div></div>';
   }
+  html += '<button class="btn btn-secondary btn-sm" onclick="loadTarefasPage()" title="Atualizar"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>';
+  html += '</div>';
+  html += '</div>';
 
   if (filtered.length === 0) {
     html += '<div class="tarefas-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><p>Nenhuma tarefa ' + (tarefasFilter === 'todas' ? 'pendente' : 'com prioridade ' + tarefasFilter) + '</p></div>';
@@ -154,6 +167,19 @@ function toggleInstanceFilter(name) {
   }
   renderTarefasPage();
 }
+
+function toggleInstanceDropdown() {
+  const menu = document.getElementById('tarefasChipMenu');
+  if (menu) menu.classList.toggle('show');
+}
+
+document.addEventListener('click', e => {
+  const dropdown = document.getElementById('tarefasInstanceDropdown');
+  if (dropdown && !dropdown.contains(e.target)) {
+    const menu = document.getElementById('tarefasChipMenu');
+    if (menu) menu.classList.remove('show');
+  }
+});
 
 function getTaskInstance(taskId) {
   const task = tarefasData.find(t => t.id === taskId);

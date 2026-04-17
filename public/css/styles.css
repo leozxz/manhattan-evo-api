@@ -2126,22 +2126,37 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sec
   font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px;
   text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; white-space: nowrap;
 }
-.tarefas-instance-filters {
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  margin-bottom: 16px;
+.tarefas-header-actions { display: flex; align-items: center; gap: 6px; }
+.tarefas-instance-dropdown { position: relative; }
+.tarefas-chip-btn {
+  display: flex; align-items: center; gap: 5px; white-space: nowrap;
 }
-.tarefas-instance-pill {
-  display: flex; align-items: center; gap: 5px;
-  padding: 5px 12px; border-radius: 16px; border: 1px solid var(--border);
-  background: var(--panel); color: var(--text-secondary);
-  font-size: 12px; font-weight: 600; cursor: pointer;
-  transition: all 0.2s; font-family: var(--font);
+.tarefas-chip-btn.active { color: var(--accent); border-color: var(--accent); }
+.tarefas-chip-menu {
+  display: none; position: absolute; top: 100%; right: 0; margin-top: 4px;
+  background: var(--panel); border: 1px solid var(--border-light);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  min-width: 180px; z-index: 20; padding: 4px 0;
 }
-.tarefas-instance-pill:hover { border-color: var(--accent); color: var(--text); }
-.tarefas-instance-pill.active {
-  background: var(--accent); color: #fff; border-color: var(--accent);
+.tarefas-chip-menu.show { display: block; }
+.tarefas-chip-option {
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+  font-size: 13px; color: var(--text); cursor: pointer;
+  transition: background 0.15s;
 }
-.tarefas-instance-pill.active .tarefas-pill-count { background: rgba(255,255,255,0.25); }
+.tarefas-chip-option:hover { background: var(--panel-alt); }
+.tarefas-chip-check {
+  width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; flex-shrink: 0; color: var(--accent);
+}
+.tarefas-chip-option.active .tarefas-chip-check {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.tarefas-chip-count {
+  margin-left: auto; font-size: 11px; color: var(--text-secondary);
+  background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 8px;
+}
 .tarefa-owner {
   display: flex; align-items: center; gap: 5px;
   font-size: 11px; color: var(--accent); font-weight: 600;
